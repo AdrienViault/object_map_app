@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Object Map - Grenoble</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    #map { 
+      height: 100vh; 
+      width: 100%;
+    }
+    /* Modal overlay styling */
+    #image-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    /* Container for the modal content */
+    #modal-content {
+      position: relative;
+    }
+    /* Responsive image styling */
+    #modal-image {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border: 2px solid #fff;
+      border-radius: 4px;
+    }
+    /* Close button styling */
+    #close-modal {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #fff;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  
+  <!-- Modal for image display -->
+  <div id="image-modal" onclick="closeModal()">
+    <div id="modal-content" onclick="event.stopPropagation()">
+      <button id="close-modal" onclick="closeModal()">Close</button>
+      <img id="modal-image" src="" alt="Object Image">
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // Center the map on Grenoble, France
+    var map = L.map('map').setView([45.188529, 5.724524], 14);
+
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map);
+
+    // Fetch marker data from the backend
+    fetch('/markers')
+      .then(response => response.json())
+      .then(data => {
+        console.log('Marker data:', data);
+        data.forEach(obj => {
+          var marker = L.marker([obj.computed_location.latitude, obj.computed_location.longitude]).addTo(map);
+          marker.bindPopup("<b>" + obj.label + "</b><br>Confidence: " + obj.score.toFixed(2));
+          marker.on('click', function() {
+            console.log('Marker clicked, loading image...');
+            document.getElementById("modal-image").src = "/image/" + obj.crop_path;
+            document.getElementById("image-modal").style.display = "flex";
+          });
+        });
+      })
+      .catch(error => console.error('Error fetching marker data:', error));
+
+    // Function to close the modal
+    function closeModal() {
+      document.getElementById("image-modal").style.display = "none";
+      document.getElementById("modal-image").src = "";
+    }
+  </script>
+</body>
+</html>
