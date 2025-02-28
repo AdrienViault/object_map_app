@@ -1,0 +1,66 @@
+{
+    "source": {
+        "GPS_metadata": {
+            "GPSVersionID": "b'\\x02\\x03\\x00\\x00'",
+            "GPSLatitudeRef": "N",
+            "GPSLatitude": {
+                "degrees": 42.0,
+                "minutes": 52.0,
+                "seconds": 25.630320008619762
+            },
+            "GPSLongitudeRef": "E",
+            "GPSLongitude": {
+                "degrees": 2.0,
+                "minutes": 10.0,
+                "seconds": 52.20156000709094
+            },
+            "GPSAltitudeRef": "b'\\x00'",
+            "GPSAltitude": 293.13,
+            "GPSTimeStamp": {
+                "hour": 19.0,
+                "minute": 3.0,
+                "second": 15.0
+            },
+            "GPSSpeedRef": "K",
+            "GPSSpeed": 17.80369664788618,
+            "GPSImgDirectionRef": "T",
+            "GPSImgDirection": 20.73871117292536,
+            "GPSDateStamp": "2024:07:15"
+        },
+        "path": "/media/adrien/Space/Datasets/Overhead/raw/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8592.JPG"
+    },
+    "side": "left",
+    "objects": [
+        {
+            "projection_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8592_perspective_left.jpg",
+            "crop_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8592_left_obj0_a photo of a street lamp_img.jpg",
+            "depth_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8592_left_obj0_a photo of a street lamp_depth_map.jpg",
+            "label": "a photo of a street lamp",
+            "score": 0.16572293639183044,
+            "index": 0,
+            "bounding_box": {
+                "xmin": 271.6944580078125,
+                "ymin": 1408.88720703125,
+                "xmax": 356.1278381347656,
+                "ymax": 1566.2281494140625
+            },
+            "relative_angle": 3.288760648436245,
+            "absolute_angle": -110.97252817863838,
+            "depth": 15.078302236703726,
+            "computed_location": {
+                "GPSLatitudeRef": "N",
+                "GPSLatitude": {
+                    "degrees": 42.0,
+                    "minutes": 52.0,
+                    "seconds": 25.45542945122918
+                },
+                "GPSLongitudeRef": "E",
+                "GPSLongitude": {
+                    "degrees": 2.0,
+                    "minutes": 10.0,
+                    "seconds": 51.58122912073804
+                }
+            }
+        }
+    ]
+}

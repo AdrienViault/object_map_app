@@ -14,8 +14,8 @@
       height: 100vh; 
       width: 100%;
     }
-    /* Modal overlay styling */
-    #image-modal {
+    /* Pipeline Modal Styles */
+    #pipeline-modal {
       position: fixed;
       top: 0;
       left: 0;
@@ -26,21 +26,35 @@
       justify-content: center;
       align-items: center;
       z-index: 1000;
+      padding: 20px;
+      box-sizing: border-box;
     }
-    /* Container for the modal content */
-    #modal-content {
-      position: relative;
-    }
-    /* Responsive image styling */
-    #modal-image {
-      max-width: 90vw;
-      max-height: 90vh;
-      object-fit: contain;
-      border: 2px solid #fff;
+    #pipeline-content {
+      background: #fff;
+      padding: 20px;
       border-radius: 4px;
+      max-width: 95%;
+      max-height: 95%;
+      overflow-y: auto;
     }
-    /* Close button styling */
-    #close-modal {
+    .pipeline-container {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 20px;
+    }
+    .pipeline-step {
+      flex: 1;
+      text-align: center;
+      min-width: 0;
+    }
+    .pipeline-step img {
+      max-width: 100%;
+      max-height: 400px;
+      object-fit: contain;
+      border: 1px solid #ccc;
+      margin-bottom: 10px;
+    }
+    #close-pipeline {
       position: absolute;
       top: 10px;
       right: 10px;
@@ -49,51 +63,107 @@
       padding: 5px 10px;
       cursor: pointer;
       border-radius: 3px;
+      z-index: 1100;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
   
-  <!-- Modal for image display -->
-  <div id="image-modal" onclick="closeModal()">
-    <div id="modal-content" onclick="event.stopPropagation()">
-      <button id="close-modal" onclick="closeModal()">Close</button>
-      <img id="modal-image" src="" alt="Object Image">
+  <!-- Pipeline Modal -->
+  <div id="pipeline-modal" onclick="closePipelineModal()">
+    <div id="pipeline-content" onclick="event.stopPropagation()">
+      <button id="close-pipeline" onclick="closePipelineModal()">Close</button>
+      <div class="pipeline-container">
+        <!-- Left Panel: Projected Image -->
+        <div class="pipeline-step">
+          <img id="projected-image" src="" alt="Projected Image">
+          <p>
+            <strong>Projected Image:</strong><br>
+            Reprojected from a 360° equirectangular image to a planar view for object detection.
+          </p>
+        </div>
+        <!-- Center Panel: Detection with Bounding Box -->
+        <div class="pipeline-step">
+          <img id="detection-image" src="" alt="Detection Image">
+          <p>
+            <strong>Detection:</strong><br>
+            This image shows the detected object with its bounding box.
+          </p>
+        </div>
+        <!-- Right Panel: Depth Image -->
+        <div class="pipeline-step">
+          <img id="depth-image" src="" alt="Depth Image">
+          <p>
+            <strong>Depth Estimation:</strong><br>
+            A dedicated depth model estimated the object distance, used to infer its position.
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // Center the map on Grenoble, France
+    // Initialize the map centered on Grenoble, France.
     var map = L.map('map').setView([45.188529, 5.724524], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-    // Add OpenStreetMap tiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-    }).addTo(map);
+    // LayerGroup to hold markers so they can be easily refreshed.
+    var markersLayer = L.layerGroup().addTo(map);
 
-    // Fetch marker data from the backend
-    fetch('/markers')
-      .then(response => response.json())
-      .then(data => {
-        console.log('Marker data:', data);
-        data.forEach(obj => {
-          var marker = L.marker([obj.computed_location.latitude, obj.computed_location.longitude]).addTo(map);
-          marker.bindPopup("<b>" + obj.label + "</b><br>Confidence: " + obj.score.toFixed(2));
-          marker.on('click', function() {
-            console.log('Marker clicked, loading image...');
-            document.getElementById("modal-image").src = "/image/" + obj.crop_path;
-            document.getElementById("image-modal").style.display = "flex";
+    // Function to load markers within the current map bounds.
+    function loadMarkers() {
+      // Get current map bounds.
+      var bounds = map.getBounds();
+      var minlat = bounds.getSouth();
+      var minlon = bounds.getWest();
+      var maxlat = bounds.getNorth();
+      var maxlon = bounds.getEast();
+
+      // Build query URL for markers endpoint.
+      var url = `/markers?minlat=${minlat}&minlon=${minlon}&maxlat=${maxlat}&maxlon=${maxlon}`;
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          // Clear existing markers.
+          markersLayer.clearLayers();
+          data.forEach(markerData => {
+            // Convert geometry from GeoJSON string to a JavaScript object.
+            var geom = JSON.parse(markerData.geom);
+            var lat = geom.coordinates[1];
+            var lon = geom.coordinates[0];
+
+            // Create marker.
+            var marker = L.marker([lat, lon]).addTo(markersLayer);
+            marker.bindPopup("<b>" + markerData.label + "</b><br>Confidence: " + markerData.score.toFixed(2));
+            
+            // On marker click, load the pipeline images into the modal.
+            marker.on('click', function() {
+              document.getElementById("projected-image").src = "/image/" + markerData.projection_path;
+              // Use detection_path if available; otherwise fallback to projection_path.
+              document.getElementById("detection-image").src = "/image/" + (markerData.detection_path || markerData.projection_path);
+              document.getElementById("depth-image").src = "/image/" + markerData.depth_path;
+              document.getElementById("pipeline-modal").style.display = "flex";
+            });
           });
-        });
-      })
-      .catch(error => console.error('Error fetching marker data:', error));
+        })
+        .catch(error => console.error('Error fetching markers:', error));
+    }
 
-    // Function to close the modal
-    function closeModal() {
-      document.getElementById("image-modal").style.display = "none";
-      document.getElementById("modal-image").src = "";
+    // Load markers on initial map load.
+    loadMarkers();
+
+    // Refresh markers whenever the map view changes.
+    map.on('moveend', loadMarkers);
+
+    // Function to close the pipeline modal.
+    function closePipelineModal() {
+      document.getElementById("pipeline-modal").style.display = "none";
+      document.getElementById("projected-image").src = "";
+      document.getElementById("detection-image").src = "";
+      document.getElementById("depth-image").src = "";
     }
   </script>
 </body>

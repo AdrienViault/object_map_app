@@ -1,0 +1,190 @@
+{
+    "source": {
+        "GPS_metadata": {
+            "GPSVersionID": "b'\\x02\\x03\\x00\\x00'",
+            "GPSLatitudeRef": "N",
+            "GPSLatitude": {
+                "degrees": 42.0,
+                "minutes": 52.0,
+                "seconds": 5.88936
+            },
+            "GPSLongitudeRef": "E",
+            "GPSLongitude": {
+                "degrees": 2.0,
+                "minutes": 9.0,
+                "seconds": 23.82443999271535
+            },
+            "GPSAltitudeRef": "b'\\x00'",
+            "GPSAltitude": 384.9,
+            "GPSTimeStamp": {
+                "hour": 18.0,
+                "minute": 57.0,
+                "second": 57.0
+            },
+            "GPSSpeedRef": "K",
+            "GPSSpeed": 16.801358841408906,
+            "GPSImgDirectionRef": "T",
+            "GPSImgDirection": 79.33220338983051,
+            "GPSDateStamp": "2024:07:15"
+        },
+        "path": "/media/adrien/Space/Datasets/Overhead/raw/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433.JPG"
+    },
+    "side": "left",
+    "objects": [
+        {
+            "projection_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_perspective_left.jpg",
+            "crop_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj0_a photo of an electricity management box_img.jpg",
+            "depth_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj0_a photo of an electricity management box_depth_map.jpg",
+            "label": "a photo of an electricity management box",
+            "score": 0.1731097549200058,
+            "index": 0,
+            "bounding_box": {
+                "xmin": 374.4296875,
+                "ymin": 1482.7244873046875,
+                "xmax": 460.51171875,
+                "ymax": 1560.28173828125
+            },
+            "relative_angle": 4.462662492579298,
+            "absolute_angle": -51.20513411759019,
+            "depth": 4.312930473914514,
+            "computed_location": {
+                "GPSLatitudeRef": "N",
+                "GPSLatitude": {
+                    "degrees": 42.0,
+                    "minutes": 52.0,
+                    "seconds": 5.976927674582839
+                },
+                "GPSLongitudeRef": "E",
+                "GPSLongitude": {
+                    "degrees": 2.0,
+                    "minutes": 9.0,
+                    "seconds": 23.676348200458577
+                }
+            }
+        },
+        {
+            "projection_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_perspective_left.jpg",
+            "crop_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj1_a photo of an electricity management box_img.jpg",
+            "depth_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj1_a photo of an electricity management box_depth_map.jpg",
+            "label": "a photo of an electricity management box",
+            "score": 0.5942327380180359,
+            "index": 1,
+            "bounding_box": {
+                "xmin": -4.811649799346924,
+                "ymin": 1521.8687744140625,
+                "xmax": 218.66690063476562,
+                "ymax": 1796.5338134765625
+            },
+            "relative_angle": 1.0740433719888287,
+            "absolute_angle": -54.59375323818066,
+            "depth": 3.2248687744140625,
+            "computed_location": {
+                "GPSLatitudeRef": "N",
+                "GPSLatitude": {
+                    "degrees": 42.0,
+                    "minutes": 52.0,
+                    "seconds": 5.949907306713271
+                },
+                "GPSLongitudeRef": "E",
+                "GPSLongitude": {
+                    "degrees": 2.0,
+                    "minutes": 9.0,
+                    "seconds": 23.708640820147266
+                }
+            }
+        },
+        {
+            "projection_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_perspective_left.jpg",
+            "crop_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj2_a photo of an electricity management box_img.jpg",
+            "depth_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj2_a photo of an electricity management box_depth_map.jpg",
+            "label": "a photo of an electricity management box",
+            "score": 0.6456760764122009,
+            "index": 2,
+            "bounding_box": {
+                "xmin": 187.48178100585938,
+                "ymin": 1554.5667724609375,
+                "xmax": 441.2297668457031,
+                "ymax": 1795.686279296875
+            },
+            "relative_angle": 3.299849168860547,
+            "absolute_angle": -52.36794744130894,
+            "depth": 3.285670353816106,
+            "computed_location": {
+                "GPSLatitudeRef": "N",
+                "GPSLatitude": {
+                    "degrees": 42.0,
+                    "minutes": 52.0,
+                    "seconds": 5.954372852547181
+                },
+                "GPSLongitudeRef": "E",
+                "GPSLongitude": {
+                    "degrees": 2.0,
+                    "minutes": 9.0,
+                    "seconds": 23.70980370112278
+                }
+            }
+        },
+        {
+            "projection_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_perspective_left.jpg",
+            "crop_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj3_a photo of an electricity management box_img.jpg",
+            "depth_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj3_a photo of an electricity management box_depth_map.jpg",
+            "label": "a photo of an electricity management box",
+            "score": 0.33287757635116577,
+            "index": 3,
+            "bounding_box": {
+                "xmin": 441.41790771484375,
+                "ymin": 1560.531982421875,
+                "xmax": 638.5946044921875,
+                "ymax": 1773.9365234375
+            },
+            "relative_angle": 5.906141113770502,
+            "absolute_angle": -49.76165549639899,
+            "depth": 3.492216550386869,
+            "computed_location": {
+                "GPSLatitudeRef": "N",
+                "GPSLatitude": {
+                    "degrees": 42.0,
+                    "minutes": 52.0,
+                    "seconds": 5.962463708737005
+                },
+                "GPSLongitudeRef": "E",
+                "GPSLongitude": {
+                    "degrees": 2.0,
+                    "minutes": 9.0,
+                    "seconds": 23.706995092162977
+                }
+            }
+        },
+        {
+            "projection_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_perspective_left.jpg",
+            "crop_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj4_a photo of an electricity management box_img.jpg",
+            "depth_path": "/media/adrien/Space/Datasets/Overhead/processed/Grenoble/barnes38/0dff1284-a972-4c55-a977-936c335eb413/2024_07_15_E/GSAE8433_left_obj4_a photo of an electricity management box_depth_map.jpg",
+            "label": "a photo of an electricity management box",
+            "score": 0.4869980812072754,
+            "index": 4,
+            "bounding_box": {
+                "xmin": 636.6029663085938,
+                "ymin": 1569.0665283203125,
+                "xmax": 824.8056030273438,
+                "ymax": 1752.8819580078125
+            },
+            "relative_angle": 8.257638658850816,
+            "absolute_angle": -47.41015795131867,
+            "depth": 3.8759181682880106,
+            "computed_location": {
+                "GPSLatitudeRef": "N",
+                "GPSLatitude": {
+                    "degrees": 42.0,
+                    "minutes": 52.0,
+                    "seconds": 5.9743615246662785
+                },
+                "GPSLongitudeRef": "E",
+                "GPSLongitude": {
+                    "degrees": 2.0,
+                    "minutes": 9.0,
+                    "seconds": 23.698726499397296
+                }
+            }
+        }
+    ]
+}
