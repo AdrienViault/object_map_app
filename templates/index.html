@@ -14,42 +14,59 @@
       height: 100vh; 
       width: 100%;
     }
-    /* Pipeline Modal Styles */
+    /* Modal Styles */
     #pipeline-modal {
       position: fixed;
       top: 0;
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.8);
       display: none;
       justify-content: center;
       align-items: center;
       z-index: 1000;
-      padding: 20px;
+      padding: 30px;
       box-sizing: border-box;
     }
     #pipeline-content {
       background: #fff;
       padding: 20px;
       border-radius: 4px;
-      max-width: 95%;
-      max-height: 95%;
+      width: 90%;
+      height: 90%;
       overflow-y: auto;
+      position: relative;
+    }
+    #modal-header {
+      position: absolute;
+      top: 10px;
+      left: 20px;
+      right: 20px;
+      font-size: 1.2em;
+      font-weight: bold;
+      text-align: center;
+      z-index: 1100;
     }
     .pipeline-container {
       display: flex;
       flex-wrap: nowrap;
       gap: 20px;
+      margin-top: 60px; /* leave space for header */
+      height: calc(100% - 60px);
     }
     .pipeline-step {
       flex: 1;
       text-align: center;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
-    .pipeline-step img {
-      max-width: 100%;
-      max-height: 400px;
+    .pipeline-step img,
+    .pipeline-step canvas {
+      max-height: 80vh;
+      width: auto;
       object-fit: contain;
       border: 1px solid #ccc;
       margin-bottom: 10px;
@@ -63,7 +80,7 @@
       padding: 5px 10px;
       cursor: pointer;
       border-radius: 3px;
-      z-index: 1100;
+      z-index: 1200;
     }
   </style>
 </head>
@@ -73,31 +90,26 @@
   <!-- Pipeline Modal -->
   <div id="pipeline-modal" onclick="closePipelineModal()">
     <div id="pipeline-content" onclick="event.stopPropagation()">
+      <div id="modal-header"></div>
       <button id="close-pipeline" onclick="closePipelineModal()">Close</button>
       <div class="pipeline-container">
-        <!-- Left Panel: Projected Image -->
+        <!-- Left Panel: Full Projection with Bounding Box -->
         <div class="pipeline-step">
-          <img id="projected-image" src="" alt="Projected Image">
-          <p>
-            <strong>Projected Image:</strong><br>
-            Reprojected from a 360° equirectangular image to a planar view for object detection.
-          </p>
+          <canvas id="projection-canvas"></canvas>
+          <p><strong>Full Projection:</strong><br>
+             Projection image with bounding box overlay.</p>
         </div>
-        <!-- Center Panel: Detection with Bounding Box -->
+        <!-- Middle Panel: Cropped Object -->
         <div class="pipeline-step">
-          <img id="detection-image" src="" alt="Detection Image">
-          <p>
-            <strong>Detection:</strong><br>
-            This image shows the detected object with its bounding box.
-          </p>
+          <img id="crop-image" src="" alt="Cropped Object">
+          <p><strong>Cropped Object:</strong><br>
+             This shows the cropped object.</p>
         </div>
-        <!-- Right Panel: Depth Image -->
+        <!-- Right Panel: Object Depth -->
         <div class="pipeline-step">
-          <img id="depth-image" src="" alt="Depth Image">
-          <p>
-            <strong>Depth Estimation:</strong><br>
-            A dedicated depth model estimated the object distance, used to infer its position.
-          </p>
+          <img id="depth-image" src="" alt="Object Depth">
+          <p><strong>Object Depth:</strong><br>
+             This image represents the object's depth.</p>
         </div>
       </div>
     </div>
@@ -105,66 +117,143 @@
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // Initialize the map centered on Grenoble, France.
+    // Initialize the map centered on Grenoble.
     var map = L.map('map').setView([45.188529, 5.724524], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-    // LayerGroup to hold markers so they can be easily refreshed.
+    // Create a LayerGroup to manage markers.
     var markersLayer = L.layerGroup().addTo(map);
 
-    // Function to load markers within the current map bounds.
+    // Function to load markers within the current bounds.
     function loadMarkers() {
-      // Get current map bounds.
       var bounds = map.getBounds();
       var minlat = bounds.getSouth();
       var minlon = bounds.getWest();
       var maxlat = bounds.getNorth();
       var maxlon = bounds.getEast();
-
-      // Build query URL for markers endpoint.
       var url = `/markers?minlat=${minlat}&minlon=${minlon}&maxlat=${maxlat}&maxlon=${maxlon}`;
+      
+      console.log("[DEBUG] Fetching markers with URL:", url);
 
       fetch(url)
         .then(response => response.json())
         .then(data => {
-          // Clear existing markers.
+          console.log("[DEBUG] Markers fetched:", data);
           markersLayer.clearLayers();
           data.forEach(markerData => {
-            // Convert geometry from GeoJSON string to a JavaScript object.
-            var geom = JSON.parse(markerData.geom);
+            console.log("[DEBUG] Processing marker:", markerData);
+            console.log("[DEBUG] Marker keys:", Object.keys(markerData));
+            try {
+              var geom = JSON.parse(markerData.geom);
+            } catch(e) {
+              console.error("[DEBUG] Error parsing geom:", e, markerData.geom);
+              return;
+            }
             var lat = geom.coordinates[1];
             var lon = geom.coordinates[0];
-
-            // Create marker.
             var marker = L.marker([lat, lon]).addTo(markersLayer);
             marker.bindPopup("<b>" + markerData.label + "</b><br>Confidence: " + markerData.score.toFixed(2));
-            
-            // On marker click, load the pipeline images into the modal.
             marker.on('click', function() {
-              document.getElementById("projected-image").src = "/image/" + markerData.projection_path;
-              // Use detection_path if available; otherwise fallback to projection_path.
-              document.getElementById("detection-image").src = "/image/" + (markerData.detection_path || markerData.projection_path);
-              document.getElementById("depth-image").src = "/image/" + markerData.depth_path;
+              console.log("[DEBUG] Marker clicked:", markerData);
+              // Update modal header with label and confidence.
+              var header = document.getElementById("modal-header");
+              header.textContent = markerData.label + " (Confidence: " + markerData.score.toFixed(2) + ")";
+              
+              // LEFT PANEL: Full projection with bounding box.
+              var canvas = document.getElementById("projection-canvas");
+              var ctx = canvas.getContext("2d");
+              var projImg = new Image();
+              projImg.onload = function() {
+                canvas.width = projImg.naturalWidth;
+                canvas.height = projImg.naturalHeight;
+                ctx.drawImage(projImg, 0, 0);
+                console.log("[DEBUG] Projection image loaded with dimensions:", projImg.naturalWidth, projImg.naturalHeight);
+                if (markerData.bounding_box) {
+                  try {
+                    var bbGeo = JSON.parse(markerData.bounding_box);
+                    if (bbGeo && bbGeo.type === "Polygon" && bbGeo.coordinates && bbGeo.coordinates.length > 0) {
+                      var coords = bbGeo.coordinates[0];
+                      if (coords.length >= 4) {
+                        var xmin = coords[0][0],
+                            ymin = coords[0][1],
+                            xmax = coords[2][0],
+                            ymax = coords[2][1];
+                        ctx.strokeStyle = 'red';
+                        ctx.lineWidth = 5; // Thicker line
+                        ctx.strokeRect(xmin, ymin, xmax - xmin, ymax - ymin);
+                        console.log("[DEBUG] Bounding box drawn:", {xmin, ymin, xmax, ymax});
+                      } else {
+                        console.warn("[DEBUG] Not enough coordinates in bounding_box polygon:", coords);
+                      }
+                    } else {
+                      console.warn("[DEBUG] Invalid GeoJSON structure for bounding_box:", bbGeo);
+                    }
+                  } catch(err) {
+                    console.error("[DEBUG] Error parsing bounding_box GeoJSON:", err);
+                  }
+                } else {
+                  console.warn("[DEBUG] bounding_box is missing for marker:", markerData);
+                }
+              };
+              projImg.onerror = function(e) {
+                console.error("[DEBUG] Error loading projection image:", e);
+              };
+              if (markerData.projection_path) {
+                console.log("[DEBUG] Setting projection image source:", markerData.projection_path);
+                projImg.src = "/image/" + markerData.projection_path;
+              } else {
+                console.warn("[DEBUG] projection_path is missing for marker:", markerData);
+                projImg.src = "";
+              }
+
+              // MIDDLE PANEL: Cropped object image.
+              if (markerData.crop_path) {
+                console.log("[DEBUG] Setting crop image source:", markerData.crop_path);
+                document.getElementById("crop-image").src = "/image/" + markerData.crop_path;
+              } else {
+                console.warn("[DEBUG] crop_path is missing for marker:", markerData);
+                document.getElementById("crop-image").src = "";
+              }
+              
+              // RIGHT PANEL: Object depth image.
+              if (markerData.depth_path) {
+                console.log("[DEBUG] Setting depth image source:", markerData.depth_path);
+                document.getElementById("depth-image").src = "/image/" + markerData.depth_path;
+              } else {
+                console.warn("[DEBUG] depth_path is missing for marker:", markerData);
+                document.getElementById("depth-image").src = "";
+              }
+              
+              // Show the modal.
+              console.log("[DEBUG] Displaying pipeline modal.");
               document.getElementById("pipeline-modal").style.display = "flex";
             });
           });
         })
-        .catch(error => console.error('Error fetching markers:', error));
+        .catch(error => console.error("[DEBUG] Error fetching markers:", error));
     }
 
-    // Load markers on initial map load.
     loadMarkers();
-
-    // Refresh markers whenever the map view changes.
     map.on('moveend', loadMarkers);
 
-    // Function to close the pipeline modal.
+    // Function to close the modal.
     function closePipelineModal() {
+      console.log("[DEBUG] Closing pipeline modal.");
       document.getElementById("pipeline-modal").style.display = "none";
-      document.getElementById("projected-image").src = "";
-      document.getElementById("detection-image").src = "";
+      var canvas = document.getElementById("projection-canvas");
+      canvas.width = 0;
+      canvas.height = 0;
+      document.getElementById("crop-image").src = "";
       document.getElementById("depth-image").src = "";
     }
+
+    // Close modal on pressing Escape.
+    document.addEventListener('keydown', function(e) {
+      if (e.key === "Escape") {
+        console.log("[DEBUG] Escape key pressed, closing modal.");
+        closePipelineModal();
+      }
+    });
   </script>
 </body>
 </html>

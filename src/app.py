@@ -11,65 +11,75 @@ app = Flask(__name__, template_folder=template_dir)
 # Database connection parameters – update these with your actual values.
 DB_NAME = "geodb"
 DB_USER = "postgres"
-DB_PASS = "D^A@cn5W"
+DB_PASS = "D^A@cn5W"  # Replace with your actual password
 DB_HOST = "localhost"
 
 def get_db_connection():
-    conn = psycopg2.connect(
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASS,
-        host=DB_HOST
-    )
-    return conn
+    try:
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            host=DB_HOST
+        )
+        print("[DEBUG] Database connection established.")
+        return conn
+    except Exception as e:
+        print("[DEBUG] Error connecting to database:", e)
+        raise e
 
 @app.route('/')
 def index():
-    # Render index.html from the templates folder.
+    print("[DEBUG] Rendering index.html")
     return render_template('index.html')
 
 @app.route('/markers')
 def markers():
-    """
-    Expects query parameters:
-      minlat, minlon, maxlat, maxlon (bounding box in decimal degrees).
-    Returns markers (as JSON) that intersect the bounding box.
-    """
+    print("[DEBUG] Received request for /markers")
     try:
         minlat = float(request.args.get('minlat'))
         minlon = float(request.args.get('minlon'))
         maxlat = float(request.args.get('maxlat'))
         maxlon = float(request.args.get('maxlon'))
-    except (TypeError, ValueError):
+        print(f"[DEBUG] Received bounding box: minlat={minlat}, minlon={minlon}, maxlat={maxlat}, maxlon={maxlon}")
+    except (TypeError, ValueError) as e:
+        print("[DEBUG] Missing or invalid bounding box parameters:", e)
         return jsonify({"error": "Missing or invalid bounding box parameters."}), 400
 
-    # Build bounding box using ST_MakeEnvelope (note: longitude first, then latitude)
+    # Create bounding box using ST_MakeEnvelope (note: lon, lat order)
     envelope = f"ST_MakeEnvelope({minlon}, {minlat}, {maxlon}, {maxlat}, 4326)"
     query = f"""
-        SELECT id, label, score, projection_path, detection_path, depth_path,
-               ST_AsGeoJSON(geom) AS geom
+        SELECT id, label, score, projection_path, detection_path, crop_path, depth_path,
+               ST_AsGeoJSON(geom) AS geom,
+               ST_AsGeoJSON(bounding_box) AS bounding_box
         FROM markers
         WHERE geom && {envelope};
     """
+    print("[DEBUG] Executing SQL query:\n", query)
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute(query)
         rows = cur.fetchall()
+        print(f"[DEBUG] Fetched {len(rows)} markers from the database.")
+        for idx, row in enumerate(rows):
+            print(f"[DEBUG] Marker {idx} keys: {list(row.keys())}")
         cur.close()
         conn.close()
         return jsonify(rows)
     except Exception as e:
+        print("[DEBUG] Error executing query:", e)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/image/<path:filename>')
 def serve_image(filename):
-    """
-    Serves images from the images folder.
-    Your images folder contains a symlink 'Grenoble' pointing to the actual storage location.
-    """
     images_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'images')
+    full_path = os.path.join(images_dir, filename)
+    print(f"[DEBUG] Serving image from: {full_path}")
+    if not os.path.exists(full_path):
+        print("[DEBUG] File does not exist:", full_path)
     return send_from_directory(images_dir, filename)
 
 if __name__ == '__main__':
+    print("[DEBUG] Starting Flask app in debug mode.")
     app.run(debug=True)
