@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgis/postgis:13-3.1-alpine
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_DB: geodb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: D^A@cn5W
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"  # or you can remove ports if not needed
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flask_app
+    restart: always
+    environment:
+      DB_NAME: geodb
+      DB_USER: postgres
+      DB_PASS: D^A@cn5W
+      DB_HOST: db
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    volumes:
+        - /home/adrien/Documents/Dev/object_map_app/images:/app/images
+        - /media/adrien/Space/Datasets/Overhead/processed/Grenoble:/app/images/Grenoble
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+volumes:
+  db_data:

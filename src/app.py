@@ -7,26 +7,23 @@ from psycopg2.extras import RealDictCursor
 # Set up Flask with the correct template folder (one level above src)
 template_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'templates')
 app = Flask(__name__, template_folder=template_dir)
+import os
+import psycopg2
 
-# Database connection parameters – update these with your actual values.
-DB_NAME = "geodb"
-DB_USER = "postgres"
-DB_PASS = "D^A@cn5W"  # Replace with your actual password
-DB_HOST = "localhost"
+DB_NAME = os.getenv("DB_NAME", "geodb")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASS = os.getenv("DB_PASS", "defaultpassword")
+DB_HOST = os.getenv("DB_HOST", "localhost")
 
 def get_db_connection():
-    try:
-        conn = psycopg2.connect(
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASS,
-            host=DB_HOST
-        )
-        print("[DEBUG] Database connection established.")
-        return conn
-    except Exception as e:
-        print("[DEBUG] Error connecting to database:", e)
-        raise e
+    conn = psycopg2.connect(
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST
+    )
+    return conn
+
 
 @app.route('/')
 def index():
