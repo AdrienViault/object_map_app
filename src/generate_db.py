@@ -1,8 +1,30 @@
+#!/usr/bin/env python3
+"""
+This script resets the markers table on your Azure managed PostgreSQL server.
+It loads configuration from a .env file, connects to the remote DB,
+enables the PostGIS extension, drops the existing 'markers' table (if any),
+creates a new 'markers' table with GIS columns, and then processes JSON metadata
+files to insert marker records into the table.
+"""
+
 import os
 import json
 import glob
 import psycopg2
 from psycopg2.extras import execute_values, RealDictCursor
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
+
+# Retrieve connection details from environment variables
+DB_NAME = os.environ.get("DB_NAME", "postgres")
+DB_USER = os.environ.get("DB_USER", "postgres")
+DB_PASS = os.environ.get("DB_PASS", "")
+DB_HOST = os.environ.get("DB_HOST", "localhost")
+DB_PORT = os.environ.get("DB_PORT", "5432")
+METADATA_DIR = os.environ.get("METADATA_DIR", "./metadata")
+print(f"[DEBUG] Using metadata directory: {METADATA_DIR}")
 
 def convert_dms_to_decimal(dms, ref):
     """
@@ -25,9 +47,8 @@ def convert_dms_to_decimal(dms, ref):
 def load_markers_from_metadata(metadata_dir):
     """
     Scans through all JSON metadata files in metadata_dir (and subdirectories)
-    and builds a list of marker dictionaries.
-    It computes decimal latitude and longitude from the DMS values in computed_location.
-    Additionally, it extracts bounding box information from the "bounding_box" key.
+    and builds a list of marker dictionaries. Computes decimal latitude/longitude 
+    and extracts bounding box information.
     """
     markers = []
     metadata_files = glob.glob(os.path.join(metadata_dir, "**", "*_metadata.json"), recursive=True)
@@ -85,27 +106,41 @@ def load_markers_from_metadata(metadata_dir):
     
     return markers
 
-# Define the directory where your JSON metadata files are stored.
-metadata_dir = "/media/adrien/Space/Datasets/Overhead/processed/"
-markers = load_markers_from_metadata(metadata_dir)
+# Load markers from metadata files
+markers = load_markers_from_metadata(METADATA_DIR)
 print(f"[DEBUG] Loaded {len(markers)} markers from metadata.")
 
-# Connect to PostgreSQL database.
+# Connect to the remote Azure managed PostgreSQL database
 try:
-    conn = psycopg2.connect(dbname="geodb", user="postgres", password="D^A@cn5W", host="localhost")
+    conn = psycopg2.connect(
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST,
+        port=DB_PORT
+    )
     cur = conn.cursor()
-    print("[DEBUG] Connected to the database.")
+    print("[DEBUG] Successfully connected to the database.")
 except Exception as e:
-    print("[DEBUG] Database connection error:", e)
+    print("[DEBUG] Error connecting to the database:", e)
     exit(1)
 
-# Drop the existing markers table if it exists.
+# Enable the PostGIS extension (if not already enabled)
+try:
+    cur.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+    conn.commit()
+    print("[DEBUG] PostGIS extension enabled.")
+except Exception as e:
+    print("[DEBUG] Error enabling PostGIS extension:", e)
+    conn.rollback()
+
+# Drop the existing markers table if it exists
 drop_table_query = "DROP TABLE IF EXISTS markers;"
-print("[DEBUG] Dropping the existing markers table if it exists...")
+print("[DEBUG] Dropping table 'markers' if it exists...")
 cur.execute(drop_table_query)
 conn.commit()
 
-# Create the markers table with an extra column for bounding box geometry and crop_path.
+# Create the markers table with GIS columns
 create_table_query = """
 CREATE TABLE markers (
     id SERIAL PRIMARY KEY,
@@ -119,12 +154,12 @@ CREATE TABLE markers (
     depth_path TEXT
 );
 """
-print("[DEBUG] Creating the markers table with bounding_box and crop_path columns...")
+print("[DEBUG] Creating table 'markers' with GIS columns...")
 cur.execute(create_table_query)
 conn.commit()
-print("[DEBUG] Table created successfully.")
+print("[DEBUG] Table 'markers' created successfully.")
 
-# Prepare a list of records for insertion.
+# Prepare a list of records for insertion from the markers data
 records = []
 for marker in markers:
     try:
@@ -134,7 +169,7 @@ for marker in markers:
         print("[DEBUG] Skipping marker with missing computed_location:", marker)
         continue
 
-    # WKT for the point geometry.
+    # Build WKT for the point geometry.
     point_wkt = f'SRID=4326;POINT({decimal_lon} {decimal_lat})'
     
     # Get bounding box WKT if available.
@@ -161,13 +196,12 @@ for marker in markers:
 
 print(f"[DEBUG] Prepared {len(records)} records for insertion.")
 
-# Prepare the INSERT query.
+# Prepare the INSERT query using execute_values for efficient bulk insert.
 insert_query = """
 INSERT INTO markers (label, score, geom, bounding_box, projection_path, detection_path, crop_path, depth_path)
 VALUES %s;
 """
 
-# Insert the records using execute_values for efficiency.
 try:
     print("[DEBUG] Inserting records into the database...")
     execute_values(cur, insert_query, records)
@@ -177,7 +211,7 @@ except Exception as e:
     conn.rollback()
     print("[DEBUG] Error inserting markers:", e)
 
-# At the end, query the table to show what can be queried.
+# Query the table to verify the inserted data
 try:
     print("[DEBUG] Querying the first 10 markers from the database:")
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -194,9 +228,9 @@ try:
 except Exception as e:
     print("[DEBUG] Error querying markers:", e)
 
-# Additionally, print information about the table structure.
+# Optionally, display the table structure information
 try:
-    print("[DEBUG] Querying table structure (column names) for 'markers':")
+    print("[DEBUG] Querying table structure for 'markers':")
     cur = conn.cursor()
     cur.execute("""
         SELECT column_name, data_type 
@@ -214,25 +248,18 @@ except Exception as e:
 conn.close()
 print("[DEBUG] Database connection closed.")
 
-# Recommendations on how to use the table.
 print("""
 [RECOMMENDATION]
-The 'markers' table now includes the following columns:
+The 'markers' table has been reset and set up with the following columns:
  - id: Primary key.
- - label: A description or label for the detected object.
- - score: The confidence score for the detection.
- - geom: A PostGIS Point representing the computed location (latitude/longitude).
- - bounding_box: A PostGIS Polygon representing the bounding box where the object was detected.
- - projection_path: The relative path to the full projection image.
- - detection_path: The relative path to the detection image (e.g., with bounding box overlay).
- - crop_path: The relative path to the cropped image of the object.
- - depth_path: The relative path to the depth map image of the object.
+ - label: Marker label.
+ - score: Detection confidence score.
+ - geom: PostGIS Point (latitude/longitude).
+ - bounding_box: PostGIS Polygon for the bounding box.
+ - projection_path: Path to the projection image.
+ - detection_path: Path to the detection image.
+ - crop_path: Path to the cropped image.
+ - depth_path: Path to the depth map image.
 
-You can query this table to retrieve markers within a specific area using spatial functions.
-For example, to get markers within a viewport:
-  SELECT * FROM markers
-  WHERE geom && ST_MakeEnvelope(lon_min, lat_min, lon_max, lat_max, 4326);
-
-This table allows you to display full projection images (and draw the bounding_box on them), 
-show the cropped object, and display the depth map for each object.
+You can now insert additional marker data and run spatial queries using PostGIS functions.
 """)

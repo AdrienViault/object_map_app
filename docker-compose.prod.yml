@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  # Disable the local DB container since production uses a managed database.
+  db:
+    image: alpine:latest
+    command: echo "Managed database in use; local db container disabled."
+    deploy:
+      replicas: 0
+
+  web:
+    environment:
+      # Production settings: point to the managed PostgreSQL instance.
+      DB_HOST: your-managed-db-endpoint.postgres.database.azure.com
+      DB_PORT: 5432
+      DB_NAME: geodb
+      DB_USER: postgres
+      DB_PASS: D^A@cn5W
+      # Production Azure Blob Storage settings.
+      STORAGE_ACCOUNT_NAME: your-production-storage-account
+      STORAGE_ACCOUNT_KEY: your-production-storage-account-key
+      STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=https;AccountName=your-production-storage-account;AccountKey=your-production-storage-account-key;EndpointSuffix=core.windows.net"
+    # In production, you might expose port 80 instead of 5000.
+    ports:
+      - "80:5000"
