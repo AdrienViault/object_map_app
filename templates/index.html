@@ -158,7 +158,7 @@
   <!-- Leaflet.markercluster JS -->
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
   <script>
-    // Set a zoom threshold to decide which endpoint to use.
+    // Set a zoom threshold: if zoom level is below this, use server clustering.
     const clusteringThreshold = 14;
 
     // Calculate a cluster distance based on the zoom level.
@@ -227,7 +227,7 @@
             var lon = geom.coordinates[0];
             var marker = L.marker([lat, lon]);
             if (markerData.cluster_count && markerData.cluster_count > 1) {
-              // Create a much larger custom icon for clusters.
+              // Create a custom large cluster icon (multiplied in size)
               var clusterIcon = L.divIcon({
                 html: `<div style="background: rgba(0,123,255,0.8); border-radius: 50%; width: 300px; height: 300px; line-height: 300px; color: white; font-size: 40px; text-align: center;">${markerData.cluster_count}</div>`,
                 className: 'custom-cluster-icon',
@@ -236,8 +236,10 @@
               marker.setIcon(clusterIcon);
               marker.bindPopup("<b>Cluster of " + markerData.cluster_count + " markers</b>");
               marker.on('click', function() {
-                // Zoom in when a cluster is clicked, and re-query.
+                // When a cluster is clicked, zoom in.
                 map.setView([lat, lon], map.getZoom() + 2);
+                // Force re-query after zooming in (in case threshold is crossed)
+                setTimeout(fetchMarkers, 500);
               });
             } else {
               marker.bindPopup("<b>" + markerData.label + "</b><br>Confidence: " + markerData.score.toFixed(2));
@@ -293,6 +295,7 @@
       document.getElementById("filter-options").style.display = "block";
     }
 
+    // Re-query markers on both movement and zoom events.
     map.on('moveend', fetchMarkers);
     map.on('zoomend', fetchMarkers);
 
