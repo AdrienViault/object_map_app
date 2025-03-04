@@ -99,6 +99,7 @@ def markers_clustered():
     Returns clusters of markers using server-side clustering.
     Markers within cluster_distance (in degrees) are grouped together.
     For each cluster, returns the centroid geometry and the number of markers in that cluster.
+    Also applies category filtering if provided.
     """
     try:
         minlat = float(request.args.get('minlat'))
@@ -108,18 +109,31 @@ def markers_clustered():
     except (TypeError, ValueError):
         return jsonify({"error": "Missing or invalid bounding box parameters."}), 400
 
+    # Clustering distance in degrees (default 0.05, can be overridden by client)
     try:
         cluster_distance = float(request.args.get('cluster_distance', 0.05))
     except ValueError:
         cluster_distance = 0.05
 
+    # Category filtering: if provided, build an SQL clause.
+    categories_param = request.args.get('categories')
+    label_clause = ""
+    label_params = []
+    if categories_param:
+        cat_list = [cat.strip() for cat in categories_param.split(',') if cat.strip()]
+        if cat_list:
+            placeholders = ",".join(["%s"] * len(cat_list))
+            label_clause = f" AND label IN ({placeholders})"
+            label_params = cat_list
+
     envelope = f"ST_MakeEnvelope({minlon}, {minlat}, {maxlon}, {maxlat}, 4326)"
-    # Revised query: Use ST_NumGeometries() to count the number of geometries in each cluster.
+    # The query: we first filter markers within the envelope (and by category, if provided),
+    # then cluster them with ST_ClusterWithin, and finally compute the cluster centroid and count.
     query = f"""
     WITH filtered AS (
       SELECT geom
       FROM markers
-      WHERE geom && {envelope}
+      WHERE geom && {envelope} {label_clause}
     ),
     clusters AS (
       SELECT unnest(ST_ClusterWithin(geom, %s)) AS cluster
@@ -133,7 +147,8 @@ def markers_clustered():
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute(query, (cluster_distance,))
+        # The first parameter is cluster_distance, followed by any label filtering parameters.
+        cur.execute(query, (*label_params, cluster_distance))
         rows = cur.fetchall()
         cur.close()
         conn.close()
