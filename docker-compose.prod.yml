@@ -9,17 +9,16 @@ services:
       replicas: 0
 
   web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flask_app
+    restart: always
     environment:
-      # Production settings: point to the managed PostgreSQL instance.
-      DB_HOST: your-managed-db-endpoint.postgres.database.azure.com
+      DB_NAME: postgres
+      DB_USER: driboune
+      DB_PASS: nbfZ29yy!4XEUet&Pq*4J%H0c
+      DB_HOST: street-utility-db-server.postgres.database.azure.com
       DB_PORT: 5432
-      DB_NAME: geodb
-      DB_USER: postgres
-      DB_PASS: D^A@cn5W
-      # Production Azure Blob Storage settings.
-      STORAGE_ACCOUNT_NAME: your-production-storage-account
-      STORAGE_ACCOUNT_KEY: your-production-storage-account-key
-      STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=https;AccountName=your-production-storage-account;AccountKey=your-production-storage-account-key;EndpointSuffix=core.windows.net"
-    # In production, you might expose port 80 instead of 5000.
     ports:
       - "80:5000"

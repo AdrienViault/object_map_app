@@ -3,27 +3,32 @@ import json
 import psycopg2
 from flask import Flask, render_template, jsonify, request, send_from_directory
 from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
 
-# Set up Flask with the correct template folder (one level above src)
-template_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'templates')
-app = Flask(__name__, template_folder=template_dir)
-import os
-import psycopg2
+# Load environment variables from .env
+load_dotenv()
 
+# Retrieve database connection settings from environment variables
 DB_NAME = os.getenv("DB_NAME", "geodb")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASS", "defaultpassword")
 DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+
+# Set up Flask with the correct template folder (one level above src)
+template_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'templates')
+app = Flask(__name__, template_folder=template_dir)
 
 def get_db_connection():
+    """Establish a connection to the PostgreSQL database using environment settings."""
     conn = psycopg2.connect(
         dbname=DB_NAME,
         user=DB_USER,
         password=DB_PASS,
-        host=DB_HOST
+        host=DB_HOST,
+        port=DB_PORT
     )
     return conn
-
 
 @app.route('/')
 def index():
@@ -79,4 +84,4 @@ def serve_image(filename):
 
 if __name__ == '__main__':
     print("[DEBUG] Starting Flask app in debug mode.")
-    app.run(debug=True)
+    app.run(debug=True, port=5001)

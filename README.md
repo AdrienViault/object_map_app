@@ -1,3 +1,10 @@
+to run pipe (ona few example, otherwise remove test option): 
+
+ python -m src.pipeline.pipe --test
+
+
+
+
 # Object Map App
 
 This project is a containerized Flask application that displays markers (and related images) on a map. The project consists of two main services:
