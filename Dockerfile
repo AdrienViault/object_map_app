@@ -4,13 +4,6 @@ FROM python:3.9-slim
 RUN apt-get update && \
     apt-get install -y wget dpkg apt-transport-https curl gnupg libfuse3-dev fuse3
 
-# Add Microsoft package repository for blobfuse2 and install it
-RUN wget https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb && \
-    dpkg -i packages-microsoft-prod.deb && \
-    rm packages-microsoft-prod.deb && \
-    apt-get update && \
-    apt-get install -y blobfuse2 && \
-    apt-get install tree
 
 # Prevent Python from writing pyc files and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1

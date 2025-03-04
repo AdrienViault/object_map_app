@@ -1,19 +1,35 @@
 import os
 import json
 import psycopg2
-from flask import Flask, render_template, jsonify, request, send_from_directory
+import mimetypes
+from io import BytesIO
+from flask import Flask, render_template, jsonify, request, send_file
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+from azure.storage.blob import BlobServiceClient
 
 # Load environment variables from .env
 load_dotenv()
 
-# Retrieve database connection settings from environment variables
+# Database configuration
 DB_NAME = os.getenv("DB_NAME", "geodb")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASS", "defaultpassword")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
+
+# Azure Blob Storage configuration
+AZURE_STORAGE_ACCOUNT = os.getenv("AZURE_STORAGE_ACCOUNT", "streetutilityimagesacct")
+AZURE_STORAGE_KEY = os.getenv("AZURE_STORAGE_KEY")  # Set this in your .env
+AZURE_BLOB_NAME = os.getenv("AZURE_BLOB_NAME", "utility-images-container")
+# Folder/prefix inside the blob container where your images are stored
+AZURE_BLOB_PREFIX = os.getenv("AZURE_BLOB_PREFIX", "SmallDataset/Grenoble")
+
+# Initialize the BlobServiceClient using the storage account details
+blob_service_client = BlobServiceClient(
+    account_url=f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net",
+    credential=AZURE_STORAGE_KEY
+)
 
 # Set up Flask with the correct template folder (one level above src)
 template_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'templates')
@@ -75,12 +91,38 @@ def markers():
 
 @app.route('/image/<path:filename>')
 def serve_image(filename):
-    images_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'images')
-    full_path = os.path.join(images_dir, filename)
-    print(f"[DEBUG] Serving image from: {full_path}")
-    if not os.path.exists(full_path):
-        print("[DEBUG] File does not exist:", full_path)
-    return send_from_directory(images_dir, filename)
+    """
+    Retrieves images from Azure Blob Storage. It assumes images are stored under the prefix
+    defined in AZURE_BLOB_PREFIX (e.g., "SmallDataset/Grenoble") inside the blob container.
+    If the incoming filename already includes the subfolder (e.g., "Grenoble/"), that part
+    is removed to avoid duplication.
+    """
+    container_name = AZURE_BLOB_NAME
+    # Ensure the prefix does not end with a slash
+    prefix = AZURE_BLOB_PREFIX.rstrip('/')
+    # Get the subfolder name from the prefix (e.g., "Grenoble")
+    subfolder = os.path.basename(prefix)
+    # If filename already starts with the subfolder name, remove it
+    if filename.startswith(f"{subfolder}/"):
+        filename = filename[len(subfolder) + 1:]
+    
+    # Build the full blob path
+    blob_path = f"{prefix}/{filename}"
+    print(f"[DEBUG] Attempting to fetch blob: container={container_name}, blob={blob_path}")
+
+    try:
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
+        download_stream = blob_client.download_blob()
+        image_data = download_stream.readall()
+        # Determine MIME type based on filename
+        mimetype, _ = mimetypes.guess_type(filename)
+        if not mimetype:
+            mimetype = 'application/octet-stream'
+        print(f"[DEBUG] Serving image {filename} with mimetype {mimetype}")
+        return send_file(BytesIO(image_data), download_name=filename, mimetype=mimetype)
+    except Exception as e:
+        print(f"[DEBUG] Error retrieving blob {blob_path}: {e}")
+        return jsonify({"error": f"Error retrieving image: {str(e)}"}), 500
 
 if __name__ == '__main__':
     print("[DEBUG] Starting Flask app in debug mode.")
