@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
   <style>
-    /* Increase base font size for the page */
     html, body {
       margin: 0;
       padding: 0;
@@ -135,19 +134,16 @@
       <div id="modal-header"></div>
       <button id="close-pipeline" onclick="closePipelineModal()">Close</button>
       <div class="pipeline-container">
-        <!-- Left Panel: Full Projection with Bounding Box -->
         <div class="pipeline-step">
           <canvas id="projection-canvas"></canvas>
           <p><strong>Full Projection:</strong><br>
              Projection image with bounding box overlay.</p>
         </div>
-        <!-- Middle Panel: Cropped Object -->
         <div class="pipeline-step">
           <img id="crop-image" src="" alt="Cropped Object">
           <p><strong>Cropped Object:</strong><br>
              This shows the cropped object.</p>
         </div>
-        <!-- Right Panel: Object Depth -->
         <div class="pipeline-step">
           <img id="depth-image" src="" alt="Object Depth">
           <p><strong>Object Depth:</strong><br>
@@ -162,11 +158,19 @@
   <!-- Leaflet.markercluster JS -->
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
   <script>
+    // Set a zoom threshold to decide which endpoint to use.
+    const clusteringThreshold = 14;
+
+    // Calculate a cluster distance based on the zoom level.
+    function calculateClusterDistance(zoom) {
+      return zoom < clusteringThreshold ? 0.05 : 0.005;
+    }
+
     // Initialize the map centered on Grenoble.
     var map = L.map('map').setView([45.188529, 5.724524], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-    // Create a marker cluster group to manage markers.
+    // Create a marker cluster group.
     var markersLayer = L.markerClusterGroup();
     map.addLayer(markersLayer);
 
@@ -187,7 +191,7 @@
         .catch(error => console.error('Error fetching categories:', error));
     }
 
-    // Load markers using selected categories.
+    // Fetch markers from the server.
     function fetchMarkers() {
       var bounds = map.getBounds();
       var minlat = bounds.getSouth();
@@ -198,7 +202,15 @@
       const checkboxes = document.querySelectorAll('input[name="category"]:checked');
       const selectedCategories = Array.from(checkboxes).map(cb => cb.value);
 
-      var url = `/markers?minlat=${minlat}&minlon=${minlon}&maxlat=${maxlat}&maxlon=${maxlon}`;
+      var endpoint, url;
+      if (map.getZoom() < clusteringThreshold) {
+        endpoint = '/markers_clustered';
+        var cluster_distance = calculateClusterDistance(map.getZoom());
+        url = `${endpoint}?minlat=${minlat}&minlon=${minlon}&maxlat=${maxlat}&maxlon=${maxlon}&cluster_distance=${cluster_distance}`;
+      } else {
+        endpoint = '/markers';
+        url = `${endpoint}?minlat=${minlat}&minlon=${minlon}&maxlat=${maxlat}&maxlon=${maxlon}`;
+      }
       if (selectedCategories.length > 0) {
         url += `&categories=${encodeURIComponent(selectedCategories.join(','))}`;
       }
@@ -210,53 +222,61 @@
           data.forEach(markerData => {
             try {
               var geom = JSON.parse(markerData.geom);
-            } catch(e) {
-              return;
-            }
+            } catch(e) { return; }
             var lat = geom.coordinates[1];
             var lon = geom.coordinates[0];
             var marker = L.marker([lat, lon]);
-            marker.bindPopup("<b>" + markerData.label + "</b><br>Confidence: " + markerData.score.toFixed(2));
-            marker.on('click', function() {
-              // Hide filter panel when a marker is clicked.
-              document.getElementById("filter-options").style.display = "none";
-
-              var header = document.getElementById("modal-header");
-              header.textContent = markerData.label + " (Confidence: " + markerData.score.toFixed(2) + ")";
-              
-              var canvas = document.getElementById("projection-canvas");
-              var ctx = canvas.getContext("2d");
-              var projImg = new Image();
-              projImg.onload = function() {
-                canvas.width = projImg.naturalWidth;
-                canvas.height = projImg.naturalHeight;
-                ctx.drawImage(projImg, 0, 0);
-                if (markerData.bounding_box) {
-                  try {
-                    var bbGeo = JSON.parse(markerData.bounding_box);
-                    if (bbGeo && bbGeo.type === "Polygon" && bbGeo.coordinates && bbGeo.coordinates.length > 0) {
-                      var coords = bbGeo.coordinates[0];
-                      if (coords.length >= 4) {
-                        var xmin = coords[0][0],
-                            ymin = coords[0][1],
-                            xmax = coords[2][0],
-                            ymax = coords[2][1];
-                        ctx.strokeStyle = 'red';
-                        ctx.lineWidth = 5;
-                        ctx.strokeRect(xmin, ymin, xmax - xmin, ymax - ymin);
+            if (markerData.cluster_count && markerData.cluster_count > 1) {
+              // Create a much larger custom icon for clusters.
+              var clusterIcon = L.divIcon({
+                html: `<div style="background: rgba(0,123,255,0.8); border-radius: 50%; width: 300px; height: 300px; line-height: 300px; color: white; font-size: 40px; text-align: center;">${markerData.cluster_count}</div>`,
+                className: 'custom-cluster-icon',
+                iconSize: [300, 300]
+              });
+              marker.setIcon(clusterIcon);
+              marker.bindPopup("<b>Cluster of " + markerData.cluster_count + " markers</b>");
+              marker.on('click', function() {
+                // Zoom in when a cluster is clicked, and re-query.
+                map.setView([lat, lon], map.getZoom() + 2);
+              });
+            } else {
+              marker.bindPopup("<b>" + markerData.label + "</b><br>Confidence: " + markerData.score.toFixed(2));
+              marker.on('click', function() {
+                document.getElementById("filter-options").style.display = "none";
+                var header = document.getElementById("modal-header");
+                header.textContent = markerData.label + " (Confidence: " + markerData.score.toFixed(2) + ")";
+                var canvas = document.getElementById("projection-canvas");
+                var ctx = canvas.getContext("2d");
+                var projImg = new Image();
+                projImg.onload = function() {
+                  canvas.width = projImg.naturalWidth;
+                  canvas.height = projImg.naturalHeight;
+                  ctx.drawImage(projImg, 0, 0);
+                  if (markerData.bounding_box) {
+                    try {
+                      var bbGeo = JSON.parse(markerData.bounding_box);
+                      if (bbGeo && bbGeo.type === "Polygon" && bbGeo.coordinates && bbGeo.coordinates.length > 0) {
+                        var coords = bbGeo.coordinates[0];
+                        if (coords.length >= 4) {
+                          var xmin = coords[0][0],
+                              ymin = coords[0][1],
+                              xmax = coords[2][0],
+                              ymax = coords[2][1];
+                          ctx.strokeStyle = 'red';
+                          ctx.lineWidth = 5;
+                          ctx.strokeRect(xmin, ymin, xmax - xmin, ymax - ymin);
+                        }
                       }
-                    }
-                  } catch(err) { }
-                }
-              };
-              projImg.onerror = function(e) { };
-              projImg.src = markerData.projection_path ? "/image/" + markerData.projection_path : "";
-              
-              document.getElementById("crop-image").src = markerData.crop_path ? "/image/" + markerData.crop_path : "";
-              document.getElementById("depth-image").src = markerData.depth_path ? "/image/" + markerData.depth_path : "";
-              
-              document.getElementById("pipeline-modal").style.display = "flex";
-            });
+                    } catch(err) { }
+                  }
+                };
+                projImg.onerror = function(e) { };
+                projImg.src = markerData.projection_path ? "/image/" + markerData.projection_path : "";
+                document.getElementById("crop-image").src = markerData.crop_path ? "/image/" + markerData.crop_path : "";
+                document.getElementById("depth-image").src = markerData.depth_path ? "/image/" + markerData.depth_path : "";
+                document.getElementById("pipeline-modal").style.display = "flex";
+              });
+            }
             markersLayer.addLayer(marker);
           });
         })
@@ -270,9 +290,17 @@
       canvas.height = 0;
       document.getElementById("crop-image").src = "";
       document.getElementById("depth-image").src = "";
-      // Show the filter panel again when closing the modal.
       document.getElementById("filter-options").style.display = "block";
     }
+
+    map.on('moveend', fetchMarkers);
+    map.on('zoomend', fetchMarkers);
+
+    document.addEventListener('change', function(e) {
+      if (e.target.name === 'category') {
+        fetchMarkers();
+      }
+    });
 
     document.addEventListener('keydown', function(e) {
       if (e.key === "Escape") {
@@ -281,12 +309,6 @@
     });
 
     loadCategories();
-    map.on('moveend', fetchMarkers);
-    document.addEventListener('change', function(e) {
-      if (e.target.name === 'category') {
-        fetchMarkers();
-      }
-    });
   </script>
 </body>
 </html>

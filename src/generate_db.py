@@ -159,6 +159,13 @@ cur.execute(create_table_query)
 conn.commit()
 print("[DEBUG] Table 'markers' created successfully.")
 
+# Create a spatial index on the geom column for faster spatial queries.
+create_index_query = "CREATE INDEX idx_markers_geom ON markers USING GIST (geom);"
+print("[DEBUG] Creating spatial index on markers.geom...")
+cur.execute(create_index_query)
+conn.commit()
+print("[DEBUG] Spatial index created.")
+
 # Prepare a list of records for insertion from the markers data
 records = []
 for marker in markers:
@@ -262,5 +269,5 @@ The 'markers' table has been reset and set up with the following columns:
  - crop_path: Path to the cropped image.
  - depth_path: Path to the depth map image.
 
-You can now insert additional marker data and run spatial queries using PostGIS functions.
+A spatial index on the geom column (idx_markers_geom) has been created to optimize spatial queries.
 """)

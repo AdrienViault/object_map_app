@@ -20,7 +20,7 @@ DB_PORT = os.getenv("DB_PORT", "5432")
 
 # Azure Blob Storage configuration
 AZURE_STORAGE_ACCOUNT = os.getenv("AZURE_STORAGE_ACCOUNT", "streetutilityimagesacct")
-AZURE_STORAGE_KEY = os.getenv("AZURE_STORAGE_KEY")  # Set this in your .env
+AZURE_STORAGE_KEY = os.getenv("AZURE_STORAGE_KEY")
 AZURE_BLOB_NAME = os.getenv("AZURE_BLOB_NAME", "utility-images-container")
 AZURE_BLOB_PREFIX = os.getenv("AZURE_BLOB_PREFIX", "SmallDataset/Grenoble")
 
@@ -47,15 +47,10 @@ def get_db_connection():
 
 @app.route('/')
 def index():
-    print("[DEBUG] Rendering index.html")
     return render_template('index.html')
 
 @app.route('/categories')
 def categories():
-    """
-    Return a list of distinct marker categories (labels) from the database.
-    This endpoint allows the client to build filter checkboxes dynamically.
-    """
     query = "SELECT DISTINCT label FROM markers ORDER BY label;"
     try:
         conn = get_db_connection()
@@ -64,28 +59,21 @@ def categories():
         results = cur.fetchall()
         cur.close()
         conn.close()
-        # Extract categories from the returned tuples.
         cats = [row[0] for row in results]
-        print(f"[DEBUG] Fetched categories: {cats}")
         return jsonify(cats)
     except Exception as e:
-        print("[DEBUG] Error executing query:", e)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/markers')
 def markers():
-    print("[DEBUG] Received request for /markers")
     try:
         minlat = float(request.args.get('minlat'))
         minlon = float(request.args.get('minlon'))
         maxlat = float(request.args.get('maxlat'))
         maxlon = float(request.args.get('maxlon'))
-        print(f"[DEBUG] Received bounding box: minlat={minlat}, minlon={minlon}, maxlat={maxlat}, maxlon={maxlon}")
-    except (TypeError, ValueError) as e:
-        print("[DEBUG] Missing or invalid bounding box parameters:", e)
+    except (TypeError, ValueError):
         return jsonify({"error": "Missing or invalid bounding box parameters."}), 400
 
-    # Create bounding box using ST_MakeEnvelope (lon, lat order)
     envelope = f"ST_MakeEnvelope({minlon}, {minlat}, {maxlon}, {maxlat}, 4326)"
     base_query = f"""
         SELECT id, label, score, projection_path, detection_path, crop_path, depth_path,
@@ -94,51 +82,77 @@ def markers():
         FROM markers
         WHERE geom && {envelope}
     """
-    
-    # Optional filtering by categories (comma-separated list)
-    categories_param = request.args.get('categories')
-    query_params = []
-    if categories_param:
-        cat_list = [cat.strip() for cat in categories_param.split(',') if cat.strip()]
-        if cat_list:
-            placeholders = ','.join(['%s'] * len(cat_list))
-            base_query += f" AND label IN ({placeholders})"
-            query_params.extend(cat_list)
-    
-    print("[DEBUG] Executing SQL query:\n", base_query)
-    
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute(base_query, query_params)
+        cur.execute(base_query)
         rows = cur.fetchall()
-        print(f"[DEBUG] Fetched {len(rows)} markers from the database.")
         cur.close()
         conn.close()
         return jsonify(rows)
     except Exception as e:
-        print("[DEBUG] Error executing query:", e)
         return jsonify({"error": str(e)}), 500
+
+@app.route('/markers_clustered')
+def markers_clustered():
+    """
+    Returns clusters of markers using server-side clustering.
+    Markers within cluster_distance (in degrees) are grouped together.
+    For each cluster, returns the centroid geometry and the number of markers in that cluster.
+    """
+    try:
+        minlat = float(request.args.get('minlat'))
+        minlon = float(request.args.get('minlon'))
+        maxlat = float(request.args.get('maxlat'))
+        maxlon = float(request.args.get('maxlon'))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Missing or invalid bounding box parameters."}), 400
+
+    try:
+        cluster_distance = float(request.args.get('cluster_distance', 0.05))
+    except ValueError:
+        cluster_distance = 0.05
+
+    envelope = f"ST_MakeEnvelope({minlon}, {minlat}, {maxlon}, {maxlat}, 4326)"
+    # Revised query: Use ST_NumGeometries() to count the number of geometries in each cluster.
+    query = f"""
+    WITH filtered AS (
+      SELECT geom
+      FROM markers
+      WHERE geom && {envelope}
+    ),
+    clusters AS (
+      SELECT unnest(ST_ClusterWithin(geom, %s)) AS cluster
+      FROM filtered
+    )
+    SELECT 
+      ST_AsGeoJSON(ST_Centroid(cluster)) AS geom,
+      ST_NumGeometries(cluster) AS cluster_count
+    FROM clusters;
+    """
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(query, (cluster_distance,))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify(rows)
+    except Exception as e:
+        import traceback
+        print("Error in /markers_clustered:", traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/image/<path:filename>')
 def serve_image(filename):
-    """
-    Retrieves images from Azure Blob Storage. It assumes images are stored under the prefix
-    defined in AZURE_BLOB_PREFIX (e.g., "SmallDataset/Grenoble") inside the blob container.
-    """
     container_name = AZURE_BLOB_NAME
-    # Ensure the prefix does not end with a slash
     prefix = AZURE_BLOB_PREFIX.rstrip('/')
-    # Get the subfolder name from the prefix (e.g., "Grenoble")
     subfolder = os.path.basename(prefix)
-    # If filename already starts with the subfolder name, remove it
     if filename.startswith(f"{subfolder}/"):
         filename = filename[len(subfolder) + 1:]
     
-    # Build the full blob path
     blob_path = f"{prefix}/{filename}"
-    print(f"[DEBUG] Attempting to fetch blob: container={container_name}, blob={blob_path}")
-
     try:
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
         download_stream = blob_client.download_blob()
@@ -146,12 +160,9 @@ def serve_image(filename):
         mimetype, _ = mimetypes.guess_type(filename)
         if not mimetype:
             mimetype = 'application/octet-stream'
-        print(f"[DEBUG] Serving image {filename} with mimetype {mimetype}")
         return send_file(BytesIO(image_data), download_name=filename, mimetype=mimetype)
     except Exception as e:
-        print(f"[DEBUG] Error retrieving blob {blob_path}: {e}")
         return jsonify({"error": f"Error retrieving image: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    print("[DEBUG] Starting Flask app in debug mode.")
     app.run(debug=True, port=5001)
