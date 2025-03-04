@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>Object Map - Grenoble</title>
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <!-- Leaflet.markercluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
   <style>
     /* Increase base font size for the page */
     html, body {
@@ -153,14 +157,18 @@
     </div>
   </div>
 
+  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- Leaflet.markercluster JS -->
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
   <script>
     // Initialize the map centered on Grenoble.
     var map = L.map('map').setView([45.188529, 5.724524], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
-    // Create a LayerGroup to manage markers.
-    var markersLayer = L.layerGroup().addTo(map);
+    // Create a marker cluster group to manage markers.
+    var markersLayer = L.markerClusterGroup();
+    map.addLayer(markersLayer);
 
     // Load dynamic categories and create checkboxes.
     function loadCategories() {
@@ -207,7 +215,7 @@
             }
             var lat = geom.coordinates[1];
             var lon = geom.coordinates[0];
-            var marker = L.marker([lat, lon]).addTo(markersLayer);
+            var marker = L.marker([lat, lon]);
             marker.bindPopup("<b>" + markerData.label + "</b><br>Confidence: " + markerData.score.toFixed(2));
             marker.on('click', function() {
               // Hide filter panel when a marker is clicked.
@@ -249,6 +257,7 @@
               
               document.getElementById("pipeline-modal").style.display = "flex";
             });
+            markersLayer.addLayer(marker);
           });
         })
         .catch(error => console.error("Error fetching markers:", error));
