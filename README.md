@@ -1,6 +1,14 @@
-to run pipe (ona few example, otherwise remove test option): 
+build :
+docker build -t streetutilitymapwebappimage .
 
- python -m src.pipeline.pipe --test
+local test run 
+docker run --rm -p 5001:5001 streetutilitymapwebappimage
+
+tag to target azure repo
+docker tag streetutilitymapwebappimage StreetUtilityWebAppRegistry.azurecr.io/streetutilitymapwebappimage:v1
+
+and push
+docker push StreetUtilityWebAppRegistry.azurecr.io/streetutilitymapwebappimage:v1
 
 
 
