@@ -146,10 +146,17 @@ CREATE TABLE IF NOT EXISTS markers (
     depth_path TEXT
 );
 """
+
 print("[DEBUG] Creating table 'markers' if it does not exist...")
 cur.execute(create_table_query)
 conn.commit()
 print("[DEBUG] Table 'markers' is ready.")
+
+# Create an index on the label column to speed up queries filtering by category
+create_index_query = "CREATE INDEX idx_markers_label ON markers(label);"
+cur.execute(create_index_query)
+conn.commit()
+
 
 # Prepare a list of records for insertion from the markers data
 records = []

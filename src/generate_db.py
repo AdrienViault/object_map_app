@@ -204,6 +204,7 @@ VALUES %s;
 
 try:
     print("[DEBUG] Inserting records into the database...")
+    from psycopg2.extras import execute_values
     execute_values(cur, insert_query, records)
     conn.commit()
     print(f"[DEBUG] Inserted {len(records)} markers into the database.")

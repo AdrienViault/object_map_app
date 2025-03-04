@@ -22,16 +22,15 @@ DB_PORT = os.getenv("DB_PORT", "5432")
 AZURE_STORAGE_ACCOUNT = os.getenv("AZURE_STORAGE_ACCOUNT", "streetutilityimagesacct")
 AZURE_STORAGE_KEY = os.getenv("AZURE_STORAGE_KEY")  # Set this in your .env
 AZURE_BLOB_NAME = os.getenv("AZURE_BLOB_NAME", "utility-images-container")
-# Folder/prefix inside the blob container where your images are stored
 AZURE_BLOB_PREFIX = os.getenv("AZURE_BLOB_PREFIX", "SmallDataset/Grenoble")
 
-# Initialize the BlobServiceClient using the storage account details
+# Initialize the BlobServiceClient
 blob_service_client = BlobServiceClient(
     account_url=f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net",
     credential=AZURE_STORAGE_KEY
 )
 
-# Set up Flask with the correct template folder (one level above src)
+# Set up Flask with the correct template folder
 template_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'templates')
 app = Flask(__name__, template_folder=template_dir)
 
@@ -51,6 +50,28 @@ def index():
     print("[DEBUG] Rendering index.html")
     return render_template('index.html')
 
+@app.route('/categories')
+def categories():
+    """
+    Return a list of distinct marker categories (labels) from the database.
+    This endpoint allows the client to build filter checkboxes dynamically.
+    """
+    query = "SELECT DISTINCT label FROM markers ORDER BY label;"
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute(query)
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        # Extract categories from the returned tuples.
+        cats = [row[0] for row in results]
+        print(f"[DEBUG] Fetched categories: {cats}")
+        return jsonify(cats)
+    except Exception as e:
+        print("[DEBUG] Error executing query:", e)
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/markers')
 def markers():
     print("[DEBUG] Received request for /markers")
@@ -64,24 +85,34 @@ def markers():
         print("[DEBUG] Missing or invalid bounding box parameters:", e)
         return jsonify({"error": "Missing or invalid bounding box parameters."}), 400
 
-    # Create bounding box using ST_MakeEnvelope (note: lon, lat order)
+    # Create bounding box using ST_MakeEnvelope (lon, lat order)
     envelope = f"ST_MakeEnvelope({minlon}, {minlat}, {maxlon}, {maxlat}, 4326)"
-    query = f"""
+    base_query = f"""
         SELECT id, label, score, projection_path, detection_path, crop_path, depth_path,
                ST_AsGeoJSON(geom) AS geom,
                ST_AsGeoJSON(bounding_box) AS bounding_box
         FROM markers
-        WHERE geom && {envelope};
+        WHERE geom && {envelope}
     """
-    print("[DEBUG] Executing SQL query:\n", query)
+    
+    # Optional filtering by categories (comma-separated list)
+    categories_param = request.args.get('categories')
+    query_params = []
+    if categories_param:
+        cat_list = [cat.strip() for cat in categories_param.split(',') if cat.strip()]
+        if cat_list:
+            placeholders = ','.join(['%s'] * len(cat_list))
+            base_query += f" AND label IN ({placeholders})"
+            query_params.extend(cat_list)
+    
+    print("[DEBUG] Executing SQL query:\n", base_query)
+    
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute(query)
+        cur.execute(base_query, query_params)
         rows = cur.fetchall()
         print(f"[DEBUG] Fetched {len(rows)} markers from the database.")
-        for idx, row in enumerate(rows):
-            print(f"[DEBUG] Marker {idx} keys: {list(row.keys())}")
         cur.close()
         conn.close()
         return jsonify(rows)
@@ -94,8 +125,6 @@ def serve_image(filename):
     """
     Retrieves images from Azure Blob Storage. It assumes images are stored under the prefix
     defined in AZURE_BLOB_PREFIX (e.g., "SmallDataset/Grenoble") inside the blob container.
-    If the incoming filename already includes the subfolder (e.g., "Grenoble/"), that part
-    is removed to avoid duplication.
     """
     container_name = AZURE_BLOB_NAME
     # Ensure the prefix does not end with a slash
@@ -114,7 +143,6 @@ def serve_image(filename):
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_path)
         download_stream = blob_client.download_blob()
         image_data = download_stream.readall()
-        # Determine MIME type based on filename
         mimetype, _ = mimetypes.guess_type(filename)
         if not mimetype:
             mimetype = 'application/octet-stream'
