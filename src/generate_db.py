@@ -3,8 +3,8 @@
 This script resets the markers table on your Azure managed PostgreSQL server.
 It loads configuration from a .env file, connects to the remote DB,
 enables the PostGIS extension, drops the existing 'markers' table (if any),
-creates a new 'markers' table with GIS columns, and then processes JSON metadata
-files to insert marker records into the table.
+creates a new 'markers' table with GIS columns (including new columns for additional metadata),
+and then processes JSON metadata files to insert marker records into the table.
 """
 
 import os
@@ -23,7 +23,7 @@ DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASS = os.environ.get("DB_PASS", "")
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
-METADATA_DIR = os.environ.get("METADATA_DIR", "./metadata")
+METADATA_DIR = os.environ.get("KEEP_METADATA_DIR", "./metadata")
 print(f"[DEBUG] Using metadata directory: {METADATA_DIR}")
 
 def convert_dms_to_decimal(dms, ref):
@@ -140,7 +140,7 @@ print("[DEBUG] Dropping table 'markers' if it exists...")
 cur.execute(drop_table_query)
 conn.commit()
 
-# Create the markers table with GIS columns
+# Create the markers table with GIS columns and additional metadata columns.
 create_table_query = """
 CREATE TABLE markers (
     id SERIAL PRIMARY KEY,
@@ -151,10 +151,14 @@ CREATE TABLE markers (
     projection_path TEXT,
     detection_path TEXT,
     crop_path TEXT,
-    depth_path TEXT
+    depth_path TEXT,
+    source_path TEXT,            -- Equirectangular image path from source->path
+    gps_img_direction REAL,      -- GPSImgDirection from source metadata
+    object_depth REAL,           -- Estimated object depth (meters) from objects->object_idx->depth
+    object_relative_angle REAL   -- Object relative angle from objects->object_idx->relative_angle
 );
 """
-print("[DEBUG] Creating table 'markers' with GIS columns...")
+print("[DEBUG] Creating table 'markers' with GIS and additional metadata columns...")
 cur.execute(create_table_query)
 conn.commit()
 print("[DEBUG] Table 'markers' created successfully.")
@@ -188,6 +192,7 @@ for marker in markers:
         bbox_wkt = None
         print("[DEBUG] No bounding_box WKT for marker, setting to NULL.")
 
+    # Build the record tuple with the new columns:
     record = (
         marker.get("label", "Unknown"),
         marker.get("score", 0.0),
@@ -196,7 +201,11 @@ for marker in markers:
         marker.get("projection_path", ""),
         marker.get("detection_path", marker.get("projection_path", "")),
         marker.get("crop_path", ""),
-        marker.get("depth_path", "")
+        marker.get("depth_path", ""),
+        marker.get("source", {}).get("path", ""),                # source_path
+        marker.get("source", {}).get("GPSImgDirection", 0.0),      # gps_img_direction
+        marker.get("depth", 0.0),                                  # object_depth
+        marker.get("relative_angle", 0.0)                          # object_relative_angle
     )
     print("[DEBUG] Prepared record:", record)
     records.append(record)
@@ -205,13 +214,15 @@ print(f"[DEBUG] Prepared {len(records)} records for insertion.")
 
 # Prepare the INSERT query using execute_values for efficient bulk insert.
 insert_query = """
-INSERT INTO markers (label, score, geom, bounding_box, projection_path, detection_path, crop_path, depth_path)
+INSERT INTO markers (
+    label, score, geom, bounding_box, projection_path, detection_path, crop_path, depth_path,
+    source_path, gps_img_direction, object_depth, object_relative_angle
+)
 VALUES %s;
 """
 
 try:
     print("[DEBUG] Inserting records into the database...")
-    from psycopg2.extras import execute_values
     execute_values(cur, insert_query, records)
     conn.commit()
     print(f"[DEBUG] Inserted {len(records)} markers into the database.")
@@ -226,7 +237,8 @@ try:
     cur.execute("""
         SELECT id, label, score, ST_AsText(geom) AS geom, 
                ST_AsText(bounding_box) AS bounding_box, 
-               projection_path, detection_path, crop_path, depth_path 
+               projection_path, detection_path, crop_path, depth_path,
+               source_path, gps_img_direction, object_depth, object_relative_angle 
         FROM markers LIMIT 10;
     """)
     rows = cur.fetchall()
@@ -268,6 +280,10 @@ The 'markers' table has been reset and set up with the following columns:
  - detection_path: Path to the detection image.
  - crop_path: Path to the cropped image.
  - depth_path: Path to the depth map image.
+ - source_path: Path to the source (equirectangular) image.
+ - gps_img_direction: GPS image direction.
+ - object_depth: Estimated depth of the object.
+ - object_relative_angle: Relative angle of the object.
 
 A spatial index on the geom column (idx_markers_geom) has been created to optimize spatial queries.
 """)
