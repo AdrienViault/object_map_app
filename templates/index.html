@@ -227,7 +227,7 @@
             var lon = geom.coordinates[0];
             var marker = L.marker([lat, lon]);
             if (markerData.cluster_count && markerData.cluster_count > 1) {
-              // Create a custom large cluster icon (multiplied in size)
+              // Create a custom large cluster icon.
               var clusterIcon = L.divIcon({
                 html: `<div style="background: rgba(0,123,255,0.8); border-radius: 50%; width: 300px; height: 300px; line-height: 300px; color: white; font-size: 40px; text-align: center;">${markerData.cluster_count}</div>`,
                 className: 'custom-cluster-icon',
@@ -236,9 +236,8 @@
               marker.setIcon(clusterIcon);
               marker.bindPopup("<b>Cluster of " + markerData.cluster_count + " markers</b>");
               marker.on('click', function() {
-                // When a cluster is clicked, zoom in.
+                // Zoom in when a cluster is clicked.
                 map.setView([lat, lon], map.getZoom() + 2);
-                // Force re-query after zooming in (in case threshold is crossed)
                 setTimeout(fetchMarkers, 500);
               });
             } else {
@@ -251,9 +250,12 @@
                 var ctx = canvas.getContext("2d");
                 var projImg = new Image();
                 projImg.onload = function() {
+                  // Set canvas dimensions based on the loaded image.
                   canvas.width = projImg.naturalWidth;
                   canvas.height = projImg.naturalHeight;
+                  // Draw the full projection image.
                   ctx.drawImage(projImg, 0, 0);
+                  // If a bounding box is provided, draw it and crop the region.
                   if (markerData.bounding_box) {
                     try {
                       var bbGeo = JSON.parse(markerData.bounding_box);
@@ -267,14 +269,26 @@
                           ctx.strokeStyle = 'red';
                           ctx.lineWidth = 5;
                           ctx.strokeRect(xmin, ymin, xmax - xmin, ymax - ymin);
+                          // Create an off-screen canvas to crop the image.
+                          var cropCanvas = document.createElement('canvas');
+                          var cropCtx = cropCanvas.getContext("2d");
+                          var cropWidth = xmax - xmin;
+                          var cropHeight = ymax - ymin;
+                          cropCanvas.width = cropWidth;
+                          cropCanvas.height = cropHeight;
+                          // Crop the region from the projection image.
+                          cropCtx.drawImage(projImg, xmin, ymin, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+                          // Set the middle image to the cropped image.
+                          document.getElementById("crop-image").src = cropCanvas.toDataURL();
                         }
                       }
-                    } catch(err) { }
+                    } catch(err) {
+                      console.error("Error processing bounding box:", err);
+                    }
                   }
                 };
-                projImg.onerror = function(e) { };
+                projImg.onerror = function(e) { console.error("Error loading projection image:", e); };
                 projImg.src = markerData.projection_path ? "/image/" + markerData.projection_path : "";
-                document.getElementById("crop-image").src = markerData.crop_path ? "/image/" + markerData.crop_path : "";
                 document.getElementById("depth-image").src = markerData.depth_path ? "/image/" + markerData.depth_path : "";
                 document.getElementById("pipeline-modal").style.display = "flex";
               });

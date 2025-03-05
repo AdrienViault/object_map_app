@@ -194,7 +194,7 @@ for marker in markers:
 
     # Build the record tuple with the new columns:
     record = (
-        marker.get("label", "Unknown"),
+        marker.get("label", "Unknown").strip(),
         marker.get("score", 0.0),
         point_wkt,
         bbox_wkt,
