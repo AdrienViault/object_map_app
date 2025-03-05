@@ -75,10 +75,10 @@ def markers():
         return jsonify({"error": "Missing or invalid bounding box parameters."}), 400
 
     envelope = f"ST_MakeEnvelope({minlon}, {minlat}, {maxlon}, {maxlat}, 4326)"
-    # Include source_path in the SELECT query.
+    # Include source_path and object_depth in the select query.
     base_query = f"""
         SELECT id, label, score, projection_path, detection_path, crop_path, depth_path,
-               source_path,
+               source_path, object_depth,
                ST_AsGeoJSON(geom) AS geom,
                ST_AsGeoJSON(bounding_box) AS bounding_box
         FROM markers
@@ -89,17 +89,12 @@ def markers():
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute(base_query)
         rows = cur.fetchall()
-        # Log the raw JSON result for debugging.
-        print("DEBUG: Raw marker rows returned:")
-        print(json.dumps(rows, indent=2))
-        # Also print each marker's source_path.
-        for row in rows:
-            print(f"DEBUG: Marker id {row.get('id')} has source_path: {row.get('source_path')}")
         cur.close()
         conn.close()
         return jsonify(rows)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/markers_clustered')
 def markers_clustered():
