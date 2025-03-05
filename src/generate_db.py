@@ -49,6 +49,10 @@ def load_markers_from_metadata(metadata_dir):
     Scans through all JSON metadata files in metadata_dir (and subdirectories)
     and builds a list of marker dictionaries. Computes decimal latitude/longitude 
     and extracts bounding box information.
+    
+    NEW:
+    - For each object, copies meta["source"] (if any) into obj["source"].
+    - Skips any object whose label (after split) equals "electricity management box".
     """
     markers = []
     metadata_files = glob.glob(os.path.join(metadata_dir, "**", "*_metadata.json"), recursive=True)
@@ -62,9 +66,21 @@ def load_markers_from_metadata(metadata_dir):
         except Exception as e:
             print(f"[DEBUG] Error reading {filepath}: {e}")
             continue
+
+        # Get the projection source info from meta (if any)
+        source_info = meta.get("source", {})
         
         # Process each detected object in the metadata file.
         for obj in meta.get("objects", []):
+            # Normalize the label and filter out "electricity management box"
+            label_str = " ".join(obj.get("label", "").split()).lower()
+            if label_str == "electricity management box":
+                print(f"[DEBUG] Skipping object with label 'electricity management box' in {filepath}.")
+                continue
+
+            # Add the source info from meta into the object.
+            obj["source"] = source_info
+
             comp = obj.get("computed_location", {})
             lat_dms = comp.get("GPSLatitude", {})
             lon_dms = comp.get("GPSLongitude", {})
@@ -202,7 +218,7 @@ for marker in markers:
         marker.get("detection_path", marker.get("projection_path", "")),
         marker.get("crop_path", ""),
         marker.get("depth_path", ""),
-        marker.get("source", {}).get("path", ""),                # source_path
+        marker.get("source", {}).get("path", ""),                # source_path from meta["source"]["path"]
         marker.get("source", {}).get("GPSImgDirection", 0.0),      # gps_img_direction
         marker.get("depth", 0.0),                                  # object_depth
         marker.get("relative_angle", 0.0)                          # object_relative_angle
@@ -223,6 +239,7 @@ VALUES %s;
 
 try:
     print("[DEBUG] Inserting records into the database...")
+    from psycopg2.extras import execute_values
     execute_values(cur, insert_query, records)
     conn.commit()
     print(f"[DEBUG] Inserted {len(records)} markers into the database.")
