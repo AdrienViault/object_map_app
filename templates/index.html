@@ -7,16 +7,17 @@
 		<!-- Leaflet CSS -->
 		<link
 			rel="stylesheet"
-			href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+			href="{{ url_for('static', filename='css/leaflet.css') }}"
 		/>
+		<!-- MarkerCluster CSS -->
 		<!-- MarkerCluster CSS -->
 		<link
 			rel="stylesheet"
-			href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"
+			href="{{ url_for('static', filename='css/MarkerCluster.css') }}"
 		/>
 		<link
 			rel="stylesheet"
-			href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"
+			href="{{ url_for('static', filename='css/MarkerCluster.Default.css') }}"
 		/>
 
 		<style>
@@ -216,9 +217,9 @@
 		</div>
 
 		<!-- Leaflet JS -->
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+		<script src="{{ url_for('static', filename='js/leaflet.js') }}"></script>
 		<!-- MarkerCluster JS -->
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+		<script src="{{ url_for('static', filename='js/leaflet.markercluster.js') }}"></script>
 
 		<script>
 			// Global variable to store all categories

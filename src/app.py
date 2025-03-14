@@ -32,7 +32,13 @@ blob_service_client = BlobServiceClient(
 
 # Set up Flask with the correct template folder
 template_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'templates')
-app = Flask(__name__, template_folder=template_dir)
+static_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'static')
+
+app = Flask(
+    __name__,
+    template_folder=template_dir,
+    static_folder=static_dir
+)
 
 def get_db_connection():
     """Establish a connection to the PostgreSQL database using environment settings."""
