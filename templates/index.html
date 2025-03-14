@@ -1,367 +1,523 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Object Map - Grenoble</title>
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <!-- Leaflet.markercluster CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-size: 18px;
-      font-family: sans-serif;
-    }
-    #map { 
-      height: 100vh; 
-      width: 100%;
-    }
-    /* Responsive filter panel styling */
-    #filter-options {
-      position: absolute;
-      left: 20px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 40vw;
-      min-width: 300px;
-      max-width: 600px;
-      max-height: 80vh;
-      overflow-y: auto;
-      background: rgba(255, 255, 255, 0.8);
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      z-index: 1100;
-    }
-    #filter-options strong {
-      display: block;
-      margin-bottom: 15px;
-      font-size: 1.4em;
-    }
-    #filter-options label {
-      display: block;
-      margin-bottom: 12px;
-      font-size: 1.1em;
-      cursor: pointer;
-    }
-    /* Modal Styles */
-    #pipeline-modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(0, 0, 0, 0.8);
-      display: none;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-      padding: 20px;
-      box-sizing: border-box;
-    }
-    #pipeline-content {
-      background: #fff;
-      border-radius: 4px;
-      width: 90%;
-      max-height: 80vh;
-      overflow: hidden;
-      position: relative;
-      font-size: 1em;
-      display: flex;
-      flex-direction: column;
-    }
-    #modal-header {
-      padding: 10px 20px;
-      font-size: 1.2em;
-      font-weight: bold;
-      text-align: center;
-      background: #f0f0f0;
-    }
-    /* Container for images */
-    .image-container {
-      position: relative;
-      text-align: center;
-    }
-    /* Full-width source image styling */
-    .pipeline-full {
-      text-align: center;
-      flex: 0 0 auto;
-      padding: 10px;
-    }
-    .pipeline-full img {
-      width: 100%;
-      max-height: 25vh;
-      object-fit: contain;
-      border: 1px solid #ccc;
-    }
-    .pipeline-full p {
-      margin: 10px 0 0 0;
-      font-size: 0.9em;
-    }
-    /* Container for processed images */
-    .pipeline-container {
-      display: flex;
-      flex: 1 1 auto;
-      gap: 10px;
-      padding: 10px;
-      box-sizing: border-box;
-    }
-    .pipeline-step {
-      flex: 1;
-      text-align: center;
-      position: relative;
-    }
-    .pipeline-step img,
-    .pipeline-step canvas {
-      max-height: 28vh;
-      width: auto;
-      object-fit: contain;
-      border: 1px solid #ccc;
-    }
-    .pipeline-step p {
-      margin: 5px 0 0 0;
-      font-size: 0.9em;
-    }
-    /* Close button */
-    #close-pipeline {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: #fff;
-      border: none;
-      padding: 5px 10px;
-      cursor: pointer;
-      border-radius: 3px;
-      z-index: 1200;
-      font-size: 1em;
-    }
-  </style>
-</head>
-<body>
-  <!-- Filter panel -->
-  <div id="filter-options">
-    <strong>Filter by Category:</strong>
-    <!-- Checkboxes will be dynamically appended here -->
-  </div>
-  <div id="map"></div>
-  
-  <!-- Pipeline Modal -->
-  <div id="pipeline-modal" onclick="closePipelineModal()">
-    <div id="pipeline-content" onclick="event.stopPropagation()">
-      <div id="modal-header"></div>
-      <button id="close-pipeline" onclick="closePipelineModal()">Close</button>
-      
-      <!-- Full-width equirectangular source image -->
-      <div class="pipeline-full image-container">
-        <img id="source-image" src="" alt="Equirectangular Source Image">
-        <p><strong>1) Equirectangular Image:</strong> Acquired from OpenStreetMap Panoramax API, 360° view.</p>
-      </div>
-      
-      <!-- Processed images container -->
-      <div class="pipeline-container">
-        <div class="pipeline-step image-container">
-          <canvas id="projection-canvas"></canvas>
-          <p><strong>2) Projection:</strong> Image projection in a given direction. 90° horizontal angle straightens lines to aid object detection.</p>
-        </div>
-        <div class="pipeline-step image-container">
-          <img id="crop-image" src="" alt="Cropped Object">
-          <p><strong>3) Object Detection:</strong> Open vocabulary object detection using a state-of-the-art, CLIP-based large vision model to detect novel objects in complex contexts.</p>
-        </div>
-        <div class="pipeline-step image-container">
-          <img id="depth-image" src="" alt="Object Depth">
-          <p id="depth-legend"><strong>4) Depth Estimation:</strong> Depth estimated at <span id="depth-value">N/A</span> meters – metric depth estimation using Meta Segment Anything with a depth head.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <!-- Leaflet.markercluster JS -->
-  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-  <script>
-    // Global variable to store all categories
-    var allCategories = [];
-    
-    const clusteringThreshold = 16;
-    function calculateClusterDistance(zoom) {
-      return zoom < clusteringThreshold ? 0.05 : 0.005;
-    }
-    
-    var map = L.map('map').setView([45.188529, 5.724524], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-    var markersLayer = L.markerClusterGroup();
-    map.addLayer(markersLayer);
-    
-    function loadCategories() {
-      fetch('/categories')
-        .then(response => response.json())
-        .then(categories => {
-          allCategories = categories;
-          const container = document.getElementById('filter-options');
-          container.innerHTML = '<strong>Filter by Category:</strong><br>';
-          categories.forEach(category => {
-            const label = document.createElement('label');
-            const input = document.createElement('input');
-            input.type = "checkbox";
-            input.name = "category";
-            input.value = category;
-            input.checked = true;
-            input.addEventListener('change', function(e) {
-              console.log("Checkbox changed for:", e.target.value, "Checked:", e.target.checked);
-              fetchMarkers();
-            });
-            label.appendChild(input);
-            label.insertAdjacentText('beforeend', " " + category);
-            container.appendChild(label);
-          });
-          console.log("Initial categories loaded:", allCategories);
-          fetchMarkers();
-        })
-        .catch(error => console.error('Error fetching categories:', error));
-    }
-    
-    function fetchMarkers() {
-      console.log("fetchMarkers() called.");
-      var bounds = map.getBounds();
-      var minlat = bounds.getSouth();
-      var minlon = bounds.getWest();
-      var maxlat = bounds.getNorth();
-      var maxlon = bounds.getEast();
-      const checkboxes = document.querySelectorAll('input[name="category"]:checked');
-      const selectedCategories = Array.from(checkboxes).map(cb => cb.value);
-      console.log("Selected categories:", selectedCategories);
-      
-      var endpoint, url;
-      // Use the /markers endpoint in client side mode; the URL includes the selected categories,
-      // but since /markers doesn't filter on server, we also filter markers client side.
-      endpoint = '/markers';
-      url = `${endpoint}?minlat=${minlat}&minlon=${minlon}&maxlat=${maxlat}&maxlon=${maxlon}`;
-      if (selectedCategories.length > 0) {
-          url += `&categories=${encodeURIComponent(selectedCategories.join(','))}`;
-      }
-      console.log("Request URL:", url);
-      
-      fetch(url)
-        .then(response => response.json())
-        .then(data => {
-          markersLayer.clearLayers();
-          data.forEach(markerData => {
-            // Client-side filtering: only add marker if its label is in selectedCategories.
-            // Using simple string matching; adjust if needed.
-            if (selectedCategories.length > 0 && !selectedCategories.includes(markerData.label.trim())) {
-              return;
-            }
-            try {
-              var geom = JSON.parse(markerData.geom);
-            } catch(e) { return; }
-            var lat = geom.coordinates[1];
-            var lon = geom.coordinates[0];
-            var marker = L.marker([lat, lon]);
-            if (markerData.cluster_count && markerData.cluster_count > 1) {
-              var clusterIcon = L.divIcon({
-                html: `<div style="background: rgba(0,123,255,0.8); border-radius: 50%; width: 300px; height: 300px; line-height: 300px; color: white; font-size: 40px; text-align: center;">${markerData.cluster_count}</div>`,
-                className: 'custom-cluster-icon',
-                iconSize: [300, 300]
-              });
-              marker.setIcon(clusterIcon);
-              marker.bindPopup("<b>Cluster of " + markerData.cluster_count + " markers</b>");
-              marker.on('click', function() {
-                map.setView([lat, lon], map.getZoom() + 2);
-                setTimeout(fetchMarkers, 500);
-              });
-            } else {
-              marker.bindPopup("<b>" + markerData.label + "</b><br>Confidence: " + markerData.score.toFixed(2));
-              marker.on('click', function() {
-                document.getElementById("filter-options").style.display = "none";
-                var header = document.getElementById("modal-header");
-                header.textContent = markerData.label + " (Confidence: " + markerData.score.toFixed(2) + ")";
-                
-                // Set the source (equirectangular) image if provided.
-                if (markerData.source_path) {
-                  document.getElementById("source-image").src = "/image/" + markerData.source_path;
-                } else {
-                  document.getElementById("source-image").src = "";
-                }
-                
-                // Load the projection image into the canvas.
-                var canvas = document.getElementById("projection-canvas");
-                var ctx = canvas.getContext("2d");
-                var projImg = new Image();
-                projImg.onload = function() {
-                  canvas.width = projImg.naturalWidth;
-                  canvas.height = projImg.naturalHeight;
-                  ctx.drawImage(projImg, 0, 0);
-                  if (markerData.bounding_box) {
-                    try {
-                      var bbGeo = JSON.parse(markerData.bounding_box);
-                      if (bbGeo && bbGeo.type === "Polygon" && bbGeo.coordinates && bbGeo.coordinates.length > 0) {
-                        var coords = bbGeo.coordinates[0];
-                        if (coords.length >= 4) {
-                          var xmin = coords[0][0],
-                              ymin = coords[0][1],
-                              xmax = coords[2][0],
-                              ymax = coords[2][1];
-                          ctx.strokeStyle = 'red';
-                          ctx.lineWidth = 5;
-                          ctx.strokeRect(xmin, ymin, xmax - xmin, ymax - ymin);
-                          var cropCanvas = document.createElement('canvas');
-                          var cropCtx = cropCanvas.getContext("2d");
-                          var cropWidth = xmax - xmin;
-                          var cropHeight = ymax - ymin;
-                          cropCanvas.width = cropWidth;
-                          cropCanvas.height = cropHeight;
-                          cropCtx.drawImage(projImg, xmin, ymin, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-                          document.getElementById("crop-image").src = cropCanvas.toDataURL();
-                        }
-                      }
-                    } catch(err) { console.error("Error processing bounding box:", err); }
-                  }
-                };
-                projImg.onerror = function(e) { console.error("Error loading projection image:", e); };
-                projImg.src = markerData.projection_path ? "/image/" + markerData.projection_path : "";
-                document.getElementById("depth-image").src = markerData.depth_path ? "/image/" + markerData.depth_path : "";
-                
-                // Update depth legend with the marker's object_depth value.
-                if (markerData.object_depth) {
-                  document.getElementById("depth-value").textContent = markerData.object_depth.toFixed(2);
-                } else {
-                  document.getElementById("depth-value").textContent = "N/A";
-                }
-                
-                document.getElementById("pipeline-modal").style.display = "flex";
-              });
-            }
-            markersLayer.addLayer(marker);
-          });
-        })
-        .catch(error => console.error("Error fetching markers:", error));
-    }
-    
-    function closePipelineModal() {
-      document.getElementById("pipeline-modal").style.display = "none";
-      var canvas = document.getElementById("projection-canvas");
-      canvas.width = 0;
-      canvas.height = 0;
-      document.getElementById("crop-image").src = "";
-      document.getElementById("depth-image").src = "";
-      document.getElementById("filter-options").style.display = "block";
-    }
-    
-    map.on('moveend', fetchMarkers);
-    map.on('zoomend', fetchMarkers);
-    
-    document.addEventListener('keydown', function(e) {
-      if (e.key === "Escape") {
-        closePipelineModal();
-      }
-    });
-    
-    loadCategories();
-  </script>
-</body>
+	<head>
+		<meta charset="UTF-8" />
+		<title>Object Map - Grenoble</title>
+
+		<!-- Leaflet CSS -->
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+		/>
+		<!-- MarkerCluster CSS -->
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"
+		/>
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"
+		/>
+
+		<style>
+			html,
+			body {
+				margin: 0;
+				padding: 0;
+				height: 100%;
+				font-size: 18px;
+				font-family: sans-serif;
+			}
+			#map {
+				height: 100vh;
+				width: 100%;
+			}
+			/* Responsive filter panel styling */
+			#filter-options {
+				position: absolute;
+				left: 20px;
+				top: 50%;
+				transform: translateY(-50%);
+				width: 40vw;
+				min-width: 300px;
+				max-width: 600px;
+				max-height: 80vh;
+				overflow-y: auto;
+				background: rgba(255, 255, 255, 0.8);
+				border-radius: 8px;
+				padding: 20px;
+				box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+				z-index: 1100;
+			}
+			#filter-options strong {
+				display: block;
+				margin-bottom: 15px;
+				font-size: 1.4em;
+			}
+			#filter-options label {
+				display: block;
+				margin-bottom: 12px;
+				font-size: 1.1em;
+				cursor: pointer;
+			}
+			/* Modal Styles */
+			#pipeline-modal {
+				position: fixed;
+				top: 0;
+				left: 0;
+				width: 100vw;
+				height: 100vh;
+				background: rgba(0, 0, 0, 0.8);
+				display: none;
+				justify-content: center;
+				align-items: center;
+				z-index: 1000;
+				padding: 20px;
+				box-sizing: border-box;
+			}
+			#pipeline-content {
+				background: #fff;
+				border-radius: 4px;
+				width: 90%;
+				max-height: 80vh;
+				overflow: hidden;
+				position: relative;
+				font-size: 1em;
+				display: flex;
+				flex-direction: column;
+			}
+			#modal-header {
+				padding: 10px 20px;
+				font-size: 1.2em;
+				font-weight: bold;
+				text-align: center;
+				background: #f0f0f0;
+			}
+			/* Container for images */
+			.image-container {
+				position: relative;
+				text-align: center;
+			}
+			/* Full-width source image styling */
+			.pipeline-full {
+				text-align: center;
+				flex: 0 0 auto;
+				padding: 10px;
+			}
+			.pipeline-full img {
+				width: 100%;
+				max-height: 25vh;
+				object-fit: contain;
+				border: 1px solid #ccc;
+			}
+			.pipeline-full p {
+				margin: 10px 0 0 0;
+				font-size: 0.9em;
+			}
+			/* Container for processed images */
+			.pipeline-container {
+				display: flex;
+				flex: 1 1 auto;
+				gap: 10px;
+				padding: 10px;
+				box-sizing: border-box;
+			}
+			.pipeline-step {
+				flex: 1;
+				text-align: center;
+				position: relative;
+			}
+			.pipeline-step img,
+			.pipeline-step canvas {
+				max-height: 28vh;
+				width: auto;
+				object-fit: contain;
+				border: 1px solid #ccc;
+			}
+			.pipeline-step p {
+				margin: 5px 0 0 0;
+				font-size: 0.9em;
+			}
+			/* Close button */
+			#close-pipeline {
+				position: absolute;
+				top: 10px;
+				right: 10px;
+				background: #fff;
+				border: none;
+				padding: 5px 10px;
+				cursor: pointer;
+				border-radius: 3px;
+				z-index: 1200;
+				font-size: 1em;
+			}
+		</style>
+	</head>
+	<body>
+		<!-- Filter panel -->
+		<div id="filter-options">
+			<strong>Filter by Category:</strong>
+			<!-- Checkboxes will be dynamically appended here -->
+		</div>
+		<div id="map"></div>
+
+		<!-- Pipeline Modal -->
+		<div id="pipeline-modal" onclick="closePipelineModal()">
+			<div id="pipeline-content" onclick="event.stopPropagation()">
+				<div id="modal-header"></div>
+				<button id="close-pipeline" onclick="closePipelineModal()">
+					Close
+				</button>
+
+				<!-- Full-width equirectangular source image -->
+				<div class="pipeline-full image-container">
+					<img
+						id="source-image"
+						src=""
+						alt="Equirectangular Source Image"
+					/>
+					<p>
+						<strong>1) Equirectangular Image:</strong> Acquired from
+						OpenStreetMap Panoramax API, 360° view.
+					</p>
+				</div>
+
+				<!-- Processed images container -->
+				<div class="pipeline-container">
+					<div class="pipeline-step image-container">
+						<canvas id="projection-canvas"></canvas>
+						<p>
+							<strong>2) Projection:</strong> Image projection in
+							a given direction. 90° horizontal angle straightens
+							lines to aid object detection.
+						</p>
+					</div>
+					<div class="pipeline-step image-container">
+						<img id="crop-image" src="" alt="Cropped Object" />
+						<p>
+							<strong>3) Object Detection:</strong> Open
+							vocabulary object detection using a
+							state-of-the-art, CLIP-based large vision model to
+							detect novel objects in complex contexts.
+						</p>
+					</div>
+					<div class="pipeline-step image-container">
+						<img id="depth-image" src="" alt="Object Depth" />
+						<p id="depth-legend">
+							<strong>4) Depth Estimation:</strong> Depth
+							estimated at
+							<span id="depth-value">N/A</span> meters – metric
+							depth estimation using Meta Segment Anything with a
+							depth head.
+						</p>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Leaflet JS -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+		<!-- MarkerCluster JS -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+
+		<script>
+			// Global variable to store all categories
+			var allCategories = [];
+
+			const clusteringThreshold = 16;
+			function calculateClusterDistance(zoom) {
+				return zoom < clusteringThreshold ? 0.05 : 0.005;
+			}
+
+			var map = L.map("map").setView([45.188529, 5.724524], 14);
+			L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+				maxZoom: 19,
+			}).addTo(map);
+			var markersLayer = L.markerClusterGroup();
+			map.addLayer(markersLayer);
+
+			function loadCategories() {
+				fetch("/categories")
+					.then((response) => response.json())
+					.then((categories) => {
+						allCategories = categories;
+						const container =
+							document.getElementById("filter-options");
+						container.innerHTML =
+							"<strong>Filter by Category:</strong><br>";
+						categories.forEach((category) => {
+							const label = document.createElement("label");
+							const input = document.createElement("input");
+							input.type = "checkbox";
+							input.name = "category";
+							input.value = category;
+							input.checked = true;
+							input.addEventListener("change", function (e) {
+								console.log(
+									"Checkbox changed for:",
+									e.target.value,
+									"Checked:",
+									e.target.checked
+								);
+								fetchMarkers();
+							});
+							label.appendChild(input);
+							label.insertAdjacentText(
+								"beforeend",
+								" " + category
+							);
+							container.appendChild(label);
+						});
+						console.log(
+							"Initial categories loaded:",
+							allCategories
+						);
+						fetchMarkers();
+					})
+					.catch((error) =>
+						console.error("Error fetching categories:", error)
+					);
+			}
+
+			function fetchMarkers() {
+				console.log("fetchMarkers() called.");
+				var bounds = map.getBounds();
+				var minlat = bounds.getSouth();
+				var minlon = bounds.getWest();
+				var maxlat = bounds.getNorth();
+				var maxlon = bounds.getEast();
+				const checkboxes = document.querySelectorAll(
+					'input[name="category"]:checked'
+				);
+				const selectedCategories = Array.from(checkboxes).map(
+					(cb) => cb.value
+				);
+				console.log("Selected categories:", selectedCategories);
+
+				var endpoint, url;
+				// Use the /markers endpoint in client side mode; the URL includes the selected categories,
+				// but since /markers doesn't filter on server, we also filter markers client side.
+				endpoint = "/markers";
+				url = `${endpoint}?minlat=${minlat}&minlon=${minlon}&maxlat=${maxlat}&maxlon=${maxlon}`;
+				if (selectedCategories.length > 0) {
+					url += `&categories=${encodeURIComponent(
+						selectedCategories.join(",")
+					)}`;
+				}
+				console.log("Request URL:", url);
+
+				fetch(url)
+					.then((response) => response.json())
+					.then((data) => {
+						markersLayer.clearLayers();
+						data.forEach((markerData) => {
+							// Client-side filtering: only add marker if its label is in selectedCategories.
+							// Using simple string matching; adjust if needed.
+							if (
+								selectedCategories.length > 0 &&
+								!selectedCategories.includes(
+									markerData.label.trim()
+								)
+							) {
+								return;
+							}
+							try {
+								var geom = JSON.parse(markerData.geom);
+							} catch (e) {
+								return;
+							}
+							var lat = geom.coordinates[1];
+							var lon = geom.coordinates[0];
+							var marker = L.marker([lat, lon]);
+							if (
+								markerData.cluster_count &&
+								markerData.cluster_count > 1
+							) {
+								var clusterIcon = L.divIcon({
+									html: `<div style="background: rgba(0,123,255,0.8); border-radius: 50%; width: 300px; height: 300px; line-height: 300px; color: white; font-size: 40px; text-align: center;">${markerData.cluster_count}</div>`,
+									className: "custom-cluster-icon",
+									iconSize: [300, 300],
+								});
+								marker.setIcon(clusterIcon);
+								marker.bindPopup(
+									"<b>Cluster of " +
+										markerData.cluster_count +
+										" markers</b>"
+								);
+								marker.on("click", function () {
+									map.setView([lat, lon], map.getZoom() + 2);
+									setTimeout(fetchMarkers, 500);
+								});
+							} else {
+								marker.bindPopup(
+									"<b>" +
+										markerData.label +
+										"</b><br>Confidence: " +
+										markerData.score.toFixed(2)
+								);
+								marker.on("click", function () {
+									document.getElementById(
+										"filter-options"
+									).style.display = "none";
+									var header =
+										document.getElementById("modal-header");
+									header.textContent =
+										markerData.label +
+										" (Confidence: " +
+										markerData.score.toFixed(2) +
+										")";
+
+									// Set the source (equirectangular) image if provided.
+									if (markerData.source_path) {
+										document.getElementById(
+											"source-image"
+										).src =
+											"/image/" + markerData.source_path;
+									} else {
+										document.getElementById(
+											"source-image"
+										).src = "";
+									}
+
+									// Load the projection image into the canvas.
+									var canvas =
+										document.getElementById(
+											"projection-canvas"
+										);
+									var ctx = canvas.getContext("2d");
+									var projImg = new Image();
+									projImg.onload = function () {
+										canvas.width = projImg.naturalWidth;
+										canvas.height = projImg.naturalHeight;
+										ctx.drawImage(projImg, 0, 0);
+										if (markerData.bounding_box) {
+											try {
+												var bbGeo = JSON.parse(
+													markerData.bounding_box
+												);
+												if (
+													bbGeo &&
+													bbGeo.type === "Polygon" &&
+													bbGeo.coordinates &&
+													bbGeo.coordinates.length > 0
+												) {
+													var coords =
+														bbGeo.coordinates[0];
+													if (coords.length >= 4) {
+														var xmin = coords[0][0],
+															ymin = coords[0][1],
+															xmax = coords[2][0],
+															ymax = coords[2][1];
+														ctx.strokeStyle = "red";
+														ctx.lineWidth = 5;
+														ctx.strokeRect(
+															xmin,
+															ymin,
+															xmax - xmin,
+															ymax - ymin
+														);
+														var cropCanvas =
+															document.createElement(
+																"canvas"
+															);
+														var cropCtx =
+															cropCanvas.getContext(
+																"2d"
+															);
+														var cropWidth =
+															xmax - xmin;
+														var cropHeight =
+															ymax - ymin;
+														cropCanvas.width =
+															cropWidth;
+														cropCanvas.height =
+															cropHeight;
+														cropCtx.drawImage(
+															projImg,
+															xmin,
+															ymin,
+															cropWidth,
+															cropHeight,
+															0,
+															0,
+															cropWidth,
+															cropHeight
+														);
+														document.getElementById(
+															"crop-image"
+														).src =
+															cropCanvas.toDataURL();
+													}
+												}
+											} catch (err) {
+												console.error(
+													"Error processing bounding box:",
+													err
+												);
+											}
+										}
+									};
+									projImg.onerror = function (e) {
+										console.error(
+											"Error loading projection image:",
+											e
+										);
+									};
+									projImg.src = markerData.projection_path
+										? "/image/" + markerData.projection_path
+										: "";
+									document.getElementById("depth-image").src =
+										markerData.depth_path
+											? "/image/" + markerData.depth_path
+											: "";
+
+									// Update depth legend with the marker's object_depth value.
+									if (markerData.object_depth) {
+										document.getElementById(
+											"depth-value"
+										).textContent =
+											markerData.object_depth.toFixed(2);
+									} else {
+										document.getElementById(
+											"depth-value"
+										).textContent = "N/A";
+									}
+
+									document.getElementById(
+										"pipeline-modal"
+									).style.display = "flex";
+								});
+							}
+							markersLayer.addLayer(marker);
+						});
+					})
+					.catch((error) =>
+						console.error("Error fetching markers:", error)
+					);
+			}
+
+			function closePipelineModal() {
+				document.getElementById("pipeline-modal").style.display =
+					"none";
+				var canvas = document.getElementById("projection-canvas");
+				canvas.width = 0;
+				canvas.height = 0;
+				document.getElementById("crop-image").src = "";
+				document.getElementById("depth-image").src = "";
+				document.getElementById("filter-options").style.display =
+					"block";
+			}
+
+			map.on("moveend", fetchMarkers);
+			map.on("zoomend", fetchMarkers);
+
+			document.addEventListener("keydown", function (e) {
+				if (e.key === "Escape") {
+					closePipelineModal();
+				}
+			});
+
+			loadCategories();
+		</script>
+	</body>
 </html>

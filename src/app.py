@@ -22,7 +22,7 @@ DB_PORT = os.getenv("DB_PORT", "5432")
 AZURE_STORAGE_ACCOUNT = os.getenv("AZURE_STORAGE_ACCOUNT", "streetutilityimagesacct")
 AZURE_STORAGE_KEY = os.getenv("AZURE_STORAGE_KEY")
 AZURE_BLOB_NAME = os.getenv("AZURE_BLOB_NAME", "utility-images-container")
-AZURE_BLOB_PREFIX = os.getenv("AZURE_BLOB_PREFIX", "SmallDataset/Grenoble")
+AZURE_BLOB_PREFIX = os.getenv("AZURE_BLOB_PREFIX", "Grenoble")
 
 # Initialize the BlobServiceClient
 blob_service_client = BlobServiceClient(
