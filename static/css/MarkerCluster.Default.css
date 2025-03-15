@@ -50,8 +50,8 @@
 .marker-cluster div {
 	width: 50px; /* Larger disk width */
 	height: 50px; /* Larger disk height */
-	margin-left: 5px;
-	margin-top: 5px;
+	margin-left: 0px;
+	margin-top: 0px;
 	display: flex; /* Enable flexbox for centering */
 	align-items: center; /* Vertical centering */
 	justify-content: center; /* Horizontal centering */
@@ -59,6 +59,7 @@
 	border-radius: 25px; /* Half of width/height for a perfect circle */
 	font: 20px "Helvetica Neue", Arial, Helvetica, sans-serif; /* Larger, thinner font */
 	font-weight: 200; /* Thinner weight if available */
+	box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
 }
 
 .marker-cluster span {
